@@ -282,3 +282,8 @@ resource "aws_vpc_security_group_ingress_rule" "allow_ssh_to_bastion" {
   ip_protocol       = "tcp"
   to_port           = 22
 }
+
+resource "aws_key_pair" "main" {
+  key_name   = "anime-review"
+  public_key = file("~/.ssh/anime-review.pub")
+}
