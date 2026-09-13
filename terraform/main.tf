@@ -120,6 +120,12 @@ resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
   to_port           = 3000
 }
 
+resource "aws_vpc_security_group_egress_rule" "allow_traffic_to_backend" {
+  security_group_id = aws_security_group.frontend_sg.id
+  referenced_security_group_id = aws_security_group.backend_sg.id
+  ip_protocol       = "3001" # semantically equivalent to all ports
+}
+
 resource "aws_security_group" "backend_sg" {
   name        = "backend_sg"
   description = "Allow frontend traffic in"
@@ -137,6 +143,13 @@ resource "aws_vpc_security_group_ingress_rule" "frontend_to_api" {
   ip_protocol                  = "tcp"
   to_port                      = 3001
 }
+
+resource "aws_vpc_security_group_egress_rule" "allow_traffic_to_db" {
+  security_group_id = aws_security_group.backend_sg.id
+  referenced_security_group_id = aws_security_group.database_sg.id
+  ip_protocol       = "5432" # semantically equivalent to all ports
+}
+
 
 resource "aws_security_group" "database_sg" {
   name        = "database_sg"
