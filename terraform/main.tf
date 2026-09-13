@@ -102,6 +102,26 @@ resource "aws_route_table_association" "api_rt_association" {
   route_table_id = aws_route_table.api_rt.id
 }
 
+
+resource "aws_route_table" "db_rt" {
+
+  vpc_id = aws_vpc.main.id
+
+  route = {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
+  }
+
+  tags = {
+    Name = "database route table"
+  }
+}
+
+resource "aws_route_table_association" "db_rt_association" {
+  subnet_id      = aws_subnet.database.id
+  route_table_id = aws_route_table.db_rt.id
+}
+
 resource "aws_security_group" "frontend_sg" {
   name        = "frontend_sg"
   description = "Allow internet traffic in"
@@ -121,19 +141,19 @@ resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "allow_traffic_to_backend" {
-  security_group_id = aws_security_group.frontend_sg.id
+  security_group_id            = aws_security_group.frontend_sg.id
   referenced_security_group_id = aws_security_group.backend_sg.id
-  ip_protocol       = "tcp"
-  to_port = 3001
-  from_port = 3001
+  ip_protocol                  = "tcp"
+  to_port                      = 3001
+  from_port                    = 3001
 }
 
 resource "aws_vpc_security_group_egress_rule" "backend_https_egress" {
   security_group_id = aws_security_group.backend_sg.id
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "tcp"
-  from_port = 443
-  to_port = 443
+  from_port         = 443
+  to_port           = 443
 }
 
 resource "aws_security_group" "backend_sg" {
@@ -155,11 +175,11 @@ resource "aws_vpc_security_group_ingress_rule" "frontend_to_api" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "allow_traffic_to_db" {
-  security_group_id = aws_security_group.backend_sg.id
+  security_group_id            = aws_security_group.backend_sg.id
   referenced_security_group_id = aws_security_group.database_sg.id
-  ip_protocol       = "tcp"
-  from_port = 5432
-  to_port = 5432
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
 }
 
 
@@ -179,4 +199,20 @@ resource "aws_vpc_security_group_ingress_rule" "api_to_db" {
   from_port                    = 5432
   ip_protocol                  = "tcp"
   to_port                      = 5432
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_https" {
+  security_group_id = aws_security_group.database_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_http" {
+  security_group_id = aws_security_group.database_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
 }
