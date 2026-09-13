@@ -88,8 +88,8 @@ resource "aws_route_table" "api_rt" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.nat_gw.id
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
   }
 
   tags = {
@@ -97,7 +97,7 @@ resource "aws_route_table" "api_rt" {
   }
 }
 
-resource "aws_route_table_association" "public_rt_association" {
+resource "aws_route_table_association" "api_rt_association" {
   subnet_id      = aws_subnet.api.id
   route_table_id = aws_route_table.api_rt.id
 }
