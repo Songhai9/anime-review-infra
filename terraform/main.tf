@@ -130,7 +130,7 @@ resource "aws_security_group" "backend_sg" {
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
+resource "aws_vpc_security_group_ingress_rule" "frontend_to_api" {
   security_group_id            = aws_security_group.backend_sg.id
   referenced_security_group_id = aws_security_group.frontend_sg.id
   from_port                    = 3001
