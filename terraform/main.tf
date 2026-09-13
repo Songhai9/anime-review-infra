@@ -217,6 +217,30 @@ resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_http" {
   to_port           = 80
 }
 
+resource "aws_vpc_security_group_egress_rule" "allow_frontend_to_web_ipv4_https" {
+  security_group_id = aws_security_group.frontend_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_frontend_to_web_ipv4_http" {
+  security_group_id = aws_security_group.frontend_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_http" {
+  security_group_id = aws_security_group.database_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+}
+
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion_sg"
   description = "Security group of the Ansible bastion"
