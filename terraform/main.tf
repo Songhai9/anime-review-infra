@@ -101,3 +101,21 @@ resource "aws_route_table_association" "api_rt_association" {
   subnet_id      = aws_subnet.api.id
   route_table_id = aws_route_table.api_rt.id
 }
+
+resource "aws_security_group" "allow_all_inbound" {
+  name        = "allow_all_inbound"
+  description = "Allow internet traffic in"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "allow_inbound"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
+  security_group_id = aws_security_group.allow_all_inbound.id
+  cidr_ipv4         = aws_vpc.main.cidr_block
+  from_port         = 3000
+  ip_protocol       = "tcp"
+  to_port           = 3000
+}
