@@ -287,3 +287,31 @@ resource "aws_key_pair" "main" {
   key_name   = "anime-review"
   public_key = file("~/.ssh/anime-review.pub")
 }
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_instance" "ansible_instance" {
+  ami                    = data.aws_ami.ubuntu
+  instance_type          = "t4g.micro"
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  subnet_id              = aws_subnet.public.id
+  key_name               = aws_key_pair.main.key_name
+
+
+  tags = {
+    Name = "Ansible instance"
+  }
+}
