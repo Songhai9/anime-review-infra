@@ -137,3 +137,21 @@ resource "aws_vpc_security_group_ingress_rule" "frontend_to_api" {
   ip_protocol                  = "tcp"
   to_port                      = 3001
 }
+
+resource "aws_security_group" "database_sg" {
+  name        = "database_sg"
+  description = "Security group of the DB"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "database-sg"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "api_to_db" {
+  security_group_id            = aws_security_group.database_sg.id
+  referenced_security_group_id = aws_security_group.backend_sg.id
+  from_port                    = 5432
+  ip_protocol                  = "tcp"
+  to_port                      = 5432
+}
