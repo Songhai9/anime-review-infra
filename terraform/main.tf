@@ -241,6 +241,14 @@ resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_http" {
   to_port           = 80
 }
 
+resource "aws_vpc_security_group_egress_rule" "allow_backend_to_internet_http" {
+  security_group_id = aws_security_group.backend_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+}
+
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion_sg"
   description = "Security group of the Ansible bastion"
