@@ -216,3 +216,61 @@ resource "aws_vpc_security_group_egress_rule" "allow_db_to_internet_http" {
   from_port         = 80
   to_port           = 80
 }
+
+resource "aws_security_group" "bastion_sg" {
+  name        = "bastion_sg"
+  description = "Security group of the Ansible bastion"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "bastion-sg"
+  }
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_bastion_to_db" {
+  security_group_id            = aws_security_group.bastion_sg.id
+  referenced_security_group_id = aws_security_group.database_sg.id
+  ip_protocol                  = "tcp"
+  from_port                    = 22
+  to_port                      = 22
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_bastion_to_api" {
+  security_group_id            = aws_security_group.bastion_sg.id
+  referenced_security_group_id = aws_security_group.backend_sg.id
+  ip_protocol                  = "tcp"
+  from_port                    = 22
+  to_port                      = 22
+}
+
+resource "aws_vpc_security_group_egress_rule" "allow_bastion_to_frontend" {
+  security_group_id            = aws_security_group.bastion_sg.id
+  referenced_security_group_id = aws_security_group.frontend_sg.id
+  ip_protocol                  = "tcp"
+  from_port                    = 22
+  to_port                      = 22
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_bastion_to_db" {
+  security_group_id            = aws_security_group.database_sg.id
+  referenced_security_group_id = aws_security_group.bastion_sg.id
+  from_port                    = 22
+  ip_protocol                  = "tcp"
+  to_port                      = 22
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_bastion_to_frontend" {
+  security_group_id            = aws_security_group.frontend_sg.id
+  referenced_security_group_id = aws_security_group.bastion_sg.id
+  from_port                    = 22
+  ip_protocol                  = "tcp"
+  to_port                      = 22
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_bastion_to_backend" {
+  security_group_id            = aws_security_group.backend_sg.id
+  referenced_security_group_id = aws_security_group.bastion_sg.id
+  from_port                    = 22
+  ip_protocol                  = "tcp"
+  to_port                      = 22
+}
