@@ -128,7 +128,7 @@ resource "aws_vpc_security_group_egress_rule" "allow_traffic_to_backend" {
   from_port = 3001
 }
 
-resource "aws_vpc_security_group_egress_rule" "allow_all_traffic_ipv4" {
+resource "aws_vpc_security_group_egress_rule" "backend_https_egress" {
   security_group_id = aws_security_group.backend_sg.id
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "tcp"
