@@ -103,7 +103,7 @@ resource "aws_route_table_association" "api_rt_association" {
 }
 
 resource "aws_security_group" "frontend_sg" {
-  name        = "allow_all_inbound"
+  name        = "frontend_sg"
   description = "Allow internet traffic in"
   vpc_id      = aws_vpc.main.id
 
@@ -118,4 +118,22 @@ resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
   from_port         = 3000
   ip_protocol       = "tcp"
   to_port           = 3000
+}
+
+resource "aws_security_group" "backend_sg" {
+  name        = "backend_sg"
+  description = "Allow frontend traffic in"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "backend-sg"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_traffic" {
+  security_group_id            = aws_security_group.backend_sg.id
+  referenced_security_group_id = aws_security_group.frontend_sg.id
+  from_port                    = 3001
+  ip_protocol                  = "tcp"
+  to_port                      = 3001
 }
