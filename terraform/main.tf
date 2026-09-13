@@ -329,3 +329,42 @@ resource "aws_eip_association" "bastion_eip_assoc" {
   instance_id   = aws_instance.ansible_instance.id
   allocation_id = aws_eip.bastion_eip.id
 }
+
+resource "aws_instance" "frontend_instance" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t4g.micro"
+  vpc_security_group_ids = [aws_security_group.frontend_sg.id]
+  subnet_id              = aws_subnet.public.id
+  key_name               = aws_key_pair.main.key_name
+
+
+  tags = {
+    Name = "Frontend instance"
+  }
+}
+
+resource "aws_instance" "backend_instance" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t4g.micro"
+  vpc_security_group_ids = [aws_security_group.backend_sg.id]
+  subnet_id              = aws_subnet.api.id
+  key_name               = aws_key_pair.main.key_name
+
+
+  tags = {
+    Name = "Backend instance"
+  }
+}
+
+resource "aws_instance" "database_instance" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t4g.micro"
+  vpc_security_group_ids = [aws_security_group.database_sg.id]
+  subnet_id              = aws_subnet.database.id
+  key_name               = aws_key_pair.main.key_name
+
+
+  tags = {
+    Name = "Database instance"
+  }
+}
