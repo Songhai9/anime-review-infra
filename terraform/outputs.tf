@@ -15,7 +15,7 @@ output "backend_private_ip" {
 }
 
 output "bastion_private_ip" {
-  value = aws_eip.bastion_eip.private_ip
+  value = aws_instance.ansible_instance.private_ip
 }
 
 output "database_private_ip" {
