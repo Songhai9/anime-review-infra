@@ -9,8 +9,17 @@
       mode: "0644"
 
   - name: Add NodeSource repository
-    deb822_repository:
-      repo: "deb [signed-by=/usr/share/keyrings/nodesource.asc] https://deb.nodesource.com/node_26.x nodistro main"
+    ansible.builtin.deb822_repository:
+      name: NodeSource
+      types:
+        - deb
+      uris:
+        - https://deb.nodesource.com/node_26.x
+      suites:
+        - nodistro
+      components:
+        - main
+      signed_by: /usr/share/keyrings/nodesource.asc
       state: present
 
   - name: Install node.js
