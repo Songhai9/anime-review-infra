@@ -55,3 +55,48 @@
       ansible.builtin.command: npm ci
       args:
         chdir: /opt/anime-review
+
+    - name: Add the user 'johnd' with a specific uid and a primary group of 'admin'
+      ansible.builtin.user:
+        name: api_launcher
+        shell: /bin/bash
+
+    - name: Create backend environment file
+      ansible.builtin.copy:
+        dest: /etc/anime-review/backend.env
+        mode: "0600"
+        content: |
+          DATABASE_HOST={{ database_private_ip }}
+          DATABASE_PORT=5432
+          DATABASE_NAME={{ db_name }}
+          DATABASE_USER={{ db_user }}
+          DATABASE_PASSWORD={{ db_password }}
+          DATABASE_SSL=false
+          API_PORT=3001
+    
+    - name: Create backend service
+      ansible.builtin.file:
+        dest: /etc/systemd/system/anime-review-api.service
+        mode: "0600"
+        content: |
+          [Unit]
+          Description=Anime Review API
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=api_launcher
+          WorkingDirectory=/opt/anime-review
+          EnvironmentFile=/etc/anime-review/backend.env
+          ExecStart=/usr/bin/node /opt/anime-review/api/server.js
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Launch backend
+      ansible.builtin.systemd_service:
+        name: anime-review-api
+        state: started
+        enabled: true
+        daemon_reload: true
