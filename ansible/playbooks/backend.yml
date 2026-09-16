@@ -45,21 +45,40 @@
           - "Node.js: {{ node_version.stdout }}"
           - "npm: {{ npm_version.stdout }}"
 
+    - name: Create backend service user
+      ansible.builtin.user:
+        name: api_launcher
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: /opt/anime-review
+        state: directory
+        owner: api_launcher
+        group: api_launcher
+        mode: "0755"
+
     - name: Clone repo
+      become_user: api_launcher
       ansible.builtin.git:
         repo: "https://gitlab.com/Songhai9/manga-app.git"
         dest: /opt/anime-review
         version: main
 
     - name: Install dependencies
+      become_user: api_launcher
       ansible.builtin.command: npm ci
       args:
         chdir: /opt/anime-review
 
-    - name: Add the user 'johnd' with a specific uid and a primary group of 'admin'
-      ansible.builtin.user:
-        name: api_launcher
-        shell: /bin/bash
+    - name: Create backend config directory
+      ansible.builtin.file:
+        path: /etc/anime-review
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
     - name: Create backend environment file
       ansible.builtin.copy:
@@ -73,11 +92,11 @@
           DATABASE_PASSWORD={{ db_password }}
           DATABASE_SSL=false
           API_PORT=3001
-    
+
     - name: Create backend service
-      ansible.builtin.file:
+      ansible.builtin.copy:
         dest: /etc/systemd/system/anime-review-api.service
-        mode: "0600"
+        mode: "0644"
         content: |
           [Unit]
           Description=Anime Review API
