@@ -1,7 +1,7 @@
-  - name: Configure backend
-    hosts: backend
-    become: true
-    tasks:
+- name: Configure backend
+  hosts: backend
+  become: true
+  tasks:
     - name: Download NodeSource GPG key
       ansible.builtin.get_url:
         url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
@@ -24,12 +24,12 @@
 
     - name: Install node.js
       ansible.builtin.apt:
-        name: 
-        - nodejs
-        - git
+        name:
+          - nodejs
+          - git
         state: present
         update_cache: true
-    
+
     - name: Check Node.js version
       ansible.builtin.command: node --version
       register: node_version
@@ -42,9 +42,9 @@
     - name: Display Node.js and npm versions
       ansible.builtin.debug:
         msg:
-        - "Node.js: {{ node_version.stdout }}"
-        - "npm: {{ npm_version.stdout }}"
-    
+          - "Node.js: {{ node_version.stdout }}"
+          - "npm: {{ npm_version.stdout }}"
+
     - name: Clone repo
       ansible.builtin.git:
         repo: "https://gitlab.com/Songhai9/manga-app.git"
