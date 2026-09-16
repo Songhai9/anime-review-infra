@@ -24,15 +24,34 @@
 
   - name: Install node.js
     ansible.builtin.apt:
-      name: nodejs
+      name: 
+      - nodejs
+      - git
       state: present
       update_cache: true
   
-  - name: Check Node.js and npm versions
-    ansible.builtin.command: node --version && npm --version
+  - name: Check Node.js version
+    ansible.builtin.command: node --version
     register: node_version
     changed_when: false
+  - name: Check npm version
+    ansible.builtin.command: npm --version
+    register: npm_version
+    changed_when: false
 
-  - name: Display Node.js version
+  - name: Display Node.js and npm versions
     ansible.builtin.debug:
-      var: node_version.stdout
+      msg:
+      - "Node.js: {{ node_version.stdout }}"
+      - "npm: {{ npm_version.stdout }}"
+  
+  - name: Clone repo
+    ansible.builtin.git:
+      repo: "https://gitlab.com/Songhai9/manga-app.git"
+      dest: /opt/anime-review
+      version: main
+
+  - name: Install dependencies
+    ansible.builtin.command: npm ci
+    args:
+      chdir: /opt/anime-review
