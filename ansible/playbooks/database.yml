@@ -1,0 +1,31 @@
+- name: "Database config"
+  hosts: database
+  become: true
+  
+  tasks:
+  - name: Install PostgreSQL and dependency
+    ansible.builtin.apt:
+      name: 
+      - postgresql
+      - python3-psycopg2
+      state: present
+      update_cache: true
+
+  - name: Start service
+    ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: true
+
+  - name: Create PostgreSQL user
+    community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+    become_user: postgres
+
+  - name: Create database
+    community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+    become_user: postgres
+

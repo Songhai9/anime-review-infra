@@ -1,0 +1,3 @@
+db_user: anilist_user
+db_name: anilist_db
+db_password: "{{ vault_db_password }}"

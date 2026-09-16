@@ -2,8 +2,8 @@ cd terraform && terraform apply -auto-approve && cd .. && sh ansible/scripts/gen
 
 ssh -o StrictHostKeyChecking=accept-new \             
   -J ubuntu@16.192.105.78 \
-  ubuntu@10.0.3.171
+  ubuntu@10.0.3.171 # private IP example of hosts
 
 ssh -o StrictHostKeyChecking=accept-new \             
   -i ~/.ssh/anime-review \ 
-  ubuntu@16.192.105.78
+  ubuntu@16.192.105.78 # Public IP of the bastion
