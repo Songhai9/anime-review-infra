@@ -4,3 +4,5 @@ terraform/*.tfstate/*
 terraform/modules/
 terraform.tfvars
 *.auto.tfvars
+*.tfstate
+*.tfstate.*
