@@ -1,0 +1,124 @@
+- name: Configure frontend
+  hosts: frontend
+  become: true
+  tasks:
+    - name: Download NodeSource GPG key
+      ansible.builtin.get_url:
+        url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+        dest: /usr/share/keyrings/nodesource.asc
+        mode: "0644"
+
+    - name: Add NodeSource repository
+      ansible.builtin.deb822_repository:
+        name: NodeSource
+        types:
+          - deb
+        uris:
+          - https://deb.nodesource.com/node_26.x
+        suites:
+          - nodistro
+        components:
+          - main
+        signed_by: /usr/share/keyrings/nodesource.asc
+        state: present
+
+    - name: Install node.js
+      ansible.builtin.apt:
+        name:
+          - nodejs
+          - git
+          - acl
+        state: present
+        update_cache: true
+
+    - name: Check Node.js version
+      ansible.builtin.command: node --version
+      register: node_version
+      changed_when: false
+    - name: Check npm version
+      ansible.builtin.command: npm --version
+      register: npm_version
+      changed_when: false
+
+    - name: Display Node.js and npm versions
+      ansible.builtin.debug:
+        msg:
+          - "Node.js: {{ node_version.stdout }}"
+          - "npm: {{ npm_version.stdout }}"
+
+    - name: Create frontend service user
+      ansible.builtin.user:
+        name: frontend_launcher
+        shell: /usr/sbin/nologin
+        create_home: true
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: /opt/anime-review
+        state: directory
+        owner: frontend_launcher
+        group: frontend_launcher
+        mode: "0755"
+
+    - name: Clone repo
+      become_user: frontend_launcher
+      ansible.builtin.git:
+        repo: "https://gitlab.com/Songhai9/manga-app.git"
+        dest: /opt/anime-review
+        version: main
+
+    - name: Install dependencies
+      become_user: frontend_launcher
+      ansible.builtin.command: npm ci
+      args:
+        chdir: /opt/anime-review
+
+    - name: Create frontend config directory
+      ansible.builtin.file:
+        path: /etc/anime-review
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create frontend environment file
+      ansible.builtin.copy:
+        dest: /etc/anime-review/frontend.env
+        mode: "0600"
+        content: API_URL=http://{{ backend_private_ip }}:3001
+      notify: Restart frontend
+
+    - name: Create frontend service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/anime-review-frontend.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Anime Review Frontend
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=frontend_launcher
+          WorkingDirectory=/opt/anime-review
+          EnvironmentFile=/etc/anime-review/frontend.env
+          ExecStart=/usr/bin/node /opt/anime-review/frontend/server.js
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart frontend
+
+    - name: Launch frontend
+      ansible.builtin.systemd_service:
+        name: anime-review-frontend
+        state: started
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Restart frontend
+      ansible.builtin.systemd_service:
+        name: anime-review-frontend
+        state: restarted
+        daemon_reload: true
