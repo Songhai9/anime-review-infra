@@ -27,6 +27,7 @@
         name:
           - nodejs
           - git
+          - acl
         state: present
         update_cache: true
 
@@ -49,7 +50,7 @@
       ansible.builtin.user:
         name: api_launcher
         shell: /usr/sbin/nologin
-        create_home: false
+        create_home: true
 
     - name: Create application directory
       ansible.builtin.file:

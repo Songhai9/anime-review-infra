@@ -8,6 +8,7 @@
         name:
           - postgresql
           - python3-psycopg2
+          - acl
         state: present
         update_cache: true
 
@@ -42,6 +43,7 @@
         line: "host {{ db_name }} {{ db_user }} {{ backend_private_ip }}/32 scram-sha-256"
         state: present
       notify: Restart PostgreSQL
+
   handlers:
     - name: Restart PostgreSQL
       ansible.builtin.service:
