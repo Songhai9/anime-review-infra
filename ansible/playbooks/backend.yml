@@ -27,3 +27,12 @@
       name: nodejs
       state: present
       update_cache: true
+  
+  - name: Check Node.js and npm versions
+    ansible.builtin.command: node --version && npm --version
+    register: node_version
+    changed_when: false
+
+  - name: Display Node.js version
+    ansible.builtin.debug:
+      var: node_version.stdout
