@@ -1,4 +1,4 @@
 db_user: anilist_user
 db_name: anilist_db
 db_password: "{{ vault_db_password }}"
-database_private_ip: 
+database_private_ip: "{{ hostvars[groups['database'][0]]['ansible_host'] | default(groups['database'][0]) }}"
