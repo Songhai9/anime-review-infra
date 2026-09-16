@@ -40,5 +40,6 @@ backend
 database
 
 [private:vars]
-ansible_ssh_common_args='-o ProxyJump=ubuntu@$BASTION_EIP'
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/anime-review -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$BASTION_EIP"'
+
 EOF

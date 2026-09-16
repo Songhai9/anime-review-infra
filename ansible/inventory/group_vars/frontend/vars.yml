@@ -1,1 +1,1 @@
-backend_private_ip: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default(groups['backend'][0]) }}"
+backend_private_ip: "{{ groups['backend'][0] }}"
