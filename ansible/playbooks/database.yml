@@ -22,12 +22,14 @@
       community.postgresql.postgresql_user:
         name: "{{ db_user }}"
         password: "{{ db_password }}"
+      become: true
       become_user: postgres
 
     - name: Create database
       community.postgresql.postgresql_db:
         name: "{{ db_name }}"
         owner: "{{ db_user }}"
+      become: true
       become_user: postgres
 
     - name: Allow PostgreSQL to listen on network interfaces

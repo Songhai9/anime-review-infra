@@ -61,6 +61,7 @@
         mode: "0755"
 
     - name: Clone repo
+      become: true
       become_user: frontend_launcher
       ansible.builtin.git:
         repo: "https://gitlab.com/Songhai9/manga-app.git"
@@ -68,10 +69,12 @@
         version: main
 
     - name: Install dependencies
+      become: true
       become_user: frontend_launcher
       ansible.builtin.command: npm ci
       args:
         chdir: /opt/anime-review
+      changed_when: false
 
     - name: Create frontend config directory
       ansible.builtin.file:
