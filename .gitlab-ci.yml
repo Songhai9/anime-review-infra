@@ -21,10 +21,6 @@ default:
 
     - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $aws_sts_output)
     - aws sts get-caller-identity
-    - mkdir -p ~/.ssh
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
-    - chmod 600 ~/.ssh/anime-review
-    - ssh-keygen -y -f ~/.ssh/anime-review > ~/.ssh/anime-review.pub
 
 workflow:
   name: Update infra
