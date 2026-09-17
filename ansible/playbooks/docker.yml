@@ -1,0 +1,14 @@
+- name: Install Docker
+  hosts: all
+  tasks:
+    - name: Install Docker
+      ansible.builtin.apt:
+        name: docker
+        state: present
+        update_cache: true
+
+    - name: Start docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true

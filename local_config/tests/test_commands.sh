@@ -1,4 +1,4 @@
-cd terraform && terraform apply -auto-approve && cd .. && sh ansible/scripts/generate_inventory.sh && cat ansible/inventory/inventory.ini
+cd terraform && terraform apply -auto-approve && cd .. && sh ./scripts/generate_inventory.sh && cat ./inventory/inventory.ini
 
 ssh-add ~/.ssh/anime-review
 
