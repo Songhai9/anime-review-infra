@@ -21,8 +21,6 @@ default:
 
     - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $aws_sts_output)
     - aws sts get-caller-identity
-    - aws s3 ls s3://songhai9-anime-review-tfstate-0909-eu-north-1/
-    - aws s3 ls s3://songhai9-anime-review-tfstate-0909-eu-north-1/anime-review/
 
 workflow:
   name: Update infra
