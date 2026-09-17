@@ -1,9 +1,10 @@
 - name: Install Docker
-  hosts: all
+  hosts: frontend:backend
+  become: true
   tasks:
     - name: Install Docker
       ansible.builtin.apt:
-        name: docker
+        name: docker.io
         state: present
         update_cache: true
 

@@ -1,3 +1,8 @@
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TERRAFORM_DIR="$SCRIPT_DIR/../../terraform"
+INVENTORY_DIR="$SCRIPT_DIR/../inventory"
+
+
 cd terraform && terraform apply -auto-approve && cd .. && sh ./scripts/generate_inventory.sh && cat ./inventory/inventory.ini
 
 ssh-add ~/.ssh/anime-review
