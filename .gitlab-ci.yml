@@ -1,13 +1,15 @@
-aws_auth_test:
+default:
   image:
-    name: amazon/aws-cli:latest
+    name: registry.gitlab.com/anilist-cicd/anilist-infra/ci-image:1.0
     entrypoint: [""]
+    
 
+.aws_oidc:
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: sts.amazonaws.com
 
-  script:
+  before_script:
     - >
       aws_sts_output=$(aws sts assume-role-with-web-identity
       --role-arn "$AWS_ROLE_ARN"
@@ -19,4 +21,46 @@ aws_auth_test:
 
     - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $aws_sts_output)
 
-    - aws sts get-caller-identity
+workflow:
+  name: Update infra
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+stages:
+  - validate
+  - plan
+  - provision
+  - configure
+  - test
+
+validating_job:
+  extends: .aws_oidc
+  stage: validate
+  script:
+    - cd terraform
+    - terraform init
+    - terraform fmt -check
+    - terraform validate
+
+planning_job:
+  extends: .aws_oidc
+  stage: plan
+  script:
+    - cd terraform
+    - terraform init
+    - terraform plan -out=tfplan
+  artifacts:
+    paths:
+      - terraform/tfplan
+    expire_in: 1 hour
+
+provisioning_job:
+  extends: .aws_oidc
+  stage: provision
+  needs:
+    - job: planning_job
+      artifacts: true
+  script:
+    - cd terraform
+    - terraform init
+    - terraform apply -auto-approve tfplan
