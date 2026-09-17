@@ -23,7 +23,6 @@ default:
     - aws sts get-caller-identity
     - aws s3 ls s3://songhai9-anime-review-tfstate-0909-eu-north-1/
     - aws s3 ls s3://songhai9-anime-review-tfstate-0909-eu-north-1/anime-review/
-    - aws s3api head-object --bucket s3://songhai9-anime-review-tfstate-0909-eu-north-1 --key anime-review/terraform.tfstate
 
 workflow:
   name: Update infra
