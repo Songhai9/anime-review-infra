@@ -310,7 +310,7 @@ resource "aws_vpc_security_group_ingress_rule" "allow_ssh_to_bastion" {
 
 resource "aws_key_pair" "main" {
   key_name   = "anime-review"
-  public_key = file("~/.ssh/anime-review.pub")
+  public_key = var.ssh_public_key
 }
 
 data "aws_ami" "ubuntu" {

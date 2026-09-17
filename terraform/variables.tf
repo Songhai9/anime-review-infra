@@ -7,3 +7,8 @@ variable "aws_region" {
 variable "admin_cidr" {
   type = string
 }
+
+variable "ssh_public_key" {
+  description = "Public SSH key used for EC2 instances"
+  type        = string
+}
