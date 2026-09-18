@@ -65,3 +65,37 @@ provisioning_job:
     - cd terraform
     - terraform init
     - terraform apply -auto-approve tfplan
+
+configuring_job:
+  extends: .aws_oidc
+  stage: configure
+  needs:
+    - job: provisioning_job
+      artifacts: true
+  
+  rules:
+    - if: "$IMAGE_TAG"
+  
+  script:
+    - mkdir -p ~/.ssh
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
+    - chmod 600 ~/.ssh/anime-review
+
+    - ansible-galaxy collection install -r ansible/requirements.yml
+
+    - bash ansible/scripts/generate_inventory.sh
+
+    - cat ansible/inventory/inventory.ini
+
+    - |
+      ansible all
+      -i ansible/inventory/inventory.ini
+      -m ping
+      --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
+
+    - |
+      ansible-playbook
+      -i ansible/inventory/inventory.ini
+      ansible/playbooks/site.yml
+      --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
+      -e "image_tag=$IMAGE_TAG"
