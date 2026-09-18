@@ -76,6 +76,10 @@ configuring_job:
   rules:
     - if: "$IMAGE_TAG"
   
+  before_script:
+  - terraform -chdir=terraform init
+  - bash ansible/scripts/generate_inventory.sh
+  
   script:
     - mkdir -p ~/.ssh
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
@@ -88,14 +92,21 @@ configuring_job:
     - cat ansible/inventory/inventory.ini
 
     - |
-      ansible all
-      -i ansible/inventory/inventory.ini
-      -m ping
+      ansible all \
+        -i ansible/inventory/inventory.ini \
+        -m wait_for_connection \
+        -a "timeout=300" \
+        --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
+
+    - |
+      ansible all \
+      -i ansible/inventory/inventory.ini \
+      -m ping \
       --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
 
     - |
-      ansible-playbook
-      -i ansible/inventory/inventory.ini
-      ansible/playbooks/site.yml
-      --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
+      ansible-playbook \
+      -i ansible/inventory/inventory.ini \
+      ansible/playbooks/site.yml \
+      --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
       -e "image_tag=$IMAGE_TAG"
