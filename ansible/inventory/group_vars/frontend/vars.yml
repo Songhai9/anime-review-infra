@@ -1,6 +1,7 @@
-frontend_container_name: anime-review-api
+frontend_container_name: anime-review-frontend
 frontend_port: "3000"
 
 frontend_image: "{{ registry_image_prefix }}/frontend:{{ image_tag }}"
 
-backend_private_ip: "{{ groups['frontend'][0] }}"
+backend_private_ip: "{{ groups['backend'][0] }}"
+backend_port: "3001"
