@@ -8,3 +8,4 @@ terraform.tfvars
 *.tfstate.*
 .terraform/
 **/.terraform/
+ansible/inventory/inventory.ini

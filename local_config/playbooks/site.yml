@@ -1,3 +1,4 @@
-- import_playbook: database.yml
-- import_playbook: backend.yml
-- import_playbook: frontend.yml
+- ansible.builtin.import_playbook: database.yml
+- name: Configure backend
+  ansible.builtin.import_playbook: backend.yml
+- ansible.builtin.import_playbook: frontend.yml

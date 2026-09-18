@@ -4,3 +4,7 @@ registry_image_prefix: "registry.gitlab.com/songhai9/manga-app"
 
 registry_username: "{{ vault_registry_username }}"
 registry_password: "{{ vault_registry_password }}"
+
+db_user: anilist_user
+db_name: anilist_db
+db_password: "{{ vault_db_password }}"

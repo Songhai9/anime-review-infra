@@ -1,0 +1,53 @@
+- name: "Database config"
+  hosts: database
+  become: true
+
+  tasks:
+    - name: Install PostgreSQL and dependency
+      ansible.builtin.apt:
+        name:
+          - postgresql
+          - python3-psycopg2
+          - acl
+        state: present
+        update_cache: true
+
+    - name: Start service
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: Create PostgreSQL user
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+      become: true
+      become_user: postgres
+
+    - name: Create database
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+      become: true
+      become_user: postgres
+
+    - name: Allow PostgreSQL to listen on network interfaces
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '*'"
+      notify: Restart PostgreSQL
+
+    - name: Allow backend to connect to PostgreSQL
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        line: "host {{ db_name }} {{ db_user }} {{ backend_private_ip }}/32 scram-sha-256"
+        state: present
+      notify: Restart PostgreSQL
+
+  handlers:
+    - name: Restart PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
