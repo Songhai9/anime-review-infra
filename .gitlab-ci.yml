@@ -84,6 +84,14 @@ configuring_job:
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
     - chmod 600 ~/.ssh/anime-review
 
+    - |
+      ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -i ~/.ssh/anime-review \
+        ubuntu@"$(terraform -chdir=terraform output -raw bastion_eip)" \
+        "echo BASTION_OK"
+
     - ansible-galaxy collection install -r ansible/requirements.yml
 
     - cat ansible/inventory/inventory.ini
