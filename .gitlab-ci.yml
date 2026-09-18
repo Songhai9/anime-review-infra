@@ -89,14 +89,14 @@ configuring_job:
     - cat ansible/inventory/inventory.ini
 
     - |
-      ansible all \
+      ansible private \
         -i ansible/inventory/inventory.ini \
         -m wait_for_connection \
         -a "timeout=300" \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
 
     - |
-      ansible all \
+      ansible private \
         -i ansible/inventory/inventory.ini \
         -m ping \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
