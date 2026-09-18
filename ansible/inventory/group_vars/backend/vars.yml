@@ -5,7 +5,3 @@ backend_image: "{{ registry_image_prefix }}/backend:{{ image_tag }}"
 
 database_private_ip: "{{ groups['database'][0] }}"
 db_port: "5432"
-
-db_name: anilist_db
-db_user: anilist_user
-db_password: "{{ vault_db_password }}"

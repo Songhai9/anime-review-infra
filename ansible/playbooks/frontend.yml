@@ -23,28 +23,18 @@
           - "{{ frontend_port }}:{{ frontend_port }}"
 
         env:
-          API_PORT: "{{ frontend_port }}"
-
-          BACKEND_HOST: "{{ backend_private_ip }}"
+          FRONTEND_PORT: "{{ frontend_port }}"
+          API_URL: "http://{{ backend_private_ip }}:{{ backend_port }}"
 
       no_log: true
 
-    - name: Wait for backend health endpoint
+    - name: Wait for frontend health endpoint
       ansible.builtin.uri:
-        url: "http://localhost:{{ frontend }}/health"
+        url: "http://localhost:{{ frontend_port }}/health"
         method: GET
         status_code: 200
       register: frontend_health
       retries: 10
       delay: 3
       until: frontend_health.status == 200
-
-    - name: Wait for backend readiness endpoint
-      ansible.builtin.uri:
-        url: "http://localhost:{{ frontend }}/ready"
-        method: GET
-        status_code: 200
-      register: frontend_ready
-      retries: 10
-      delay: 3
-      until: frontend_ready.status == 200
+      
