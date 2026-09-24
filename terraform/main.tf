@@ -168,6 +168,22 @@ resource "aws_vpc_security_group_egress_rule" "bastion_api_to_control_plane" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "bastion_http_outbound" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_https_outbound" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "control_plane_ssh_from_bastion" {
   security_group_id            = aws_security_group.control_plane.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -200,6 +216,22 @@ resource "aws_vpc_security_group_egress_rule" "control_plane_kubelet_to_workers"
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "control_plane_http_outbound" {
+  security_group_id = aws_security_group.control_plane.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "control_plane_https_outbound" {
+  security_group_id = aws_security_group.control_plane.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "worker_ssh_from_bastion" {
   security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -222,6 +254,22 @@ resource "aws_vpc_security_group_egress_rule" "worker_api_to_control_plane" {
   from_port                    = 6443
   to_port                      = 6443
   ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "worker_http_outbound" {
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "worker_https_outbound" {
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "k8s_nodes_vxlan_from_nodes" {
