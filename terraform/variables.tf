@@ -34,23 +34,5 @@ variable "kubernetes_subnet_cidr" {
   default     = "10.0.10.0/24"
 }
 
-variable "ssh_public_key" {
-  description = "Public SSH key used by the bastion and Kubernetes nodes"
-  type        = string
-}
-
-variable "bastion_instance_type" {
-  description = "EC2 instance type for the bastion"
-  type        = string
-  default     = "t4g.micro"
-}
-
-variable "kubernetes_instance_type" {
-  description = "EC2 instance type for Kubernetes nodes"
-  type        = string
-  default     = "t4g.small"
-}
-
 variable "availability_zone" {
-  type = string
 }
