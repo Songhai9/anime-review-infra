@@ -1,3 +1,18 @@
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -184,6 +199,22 @@ resource "aws_vpc_security_group_egress_rule" "bastion_https_outbound" {
   ip_protocol       = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "bastion_dns_udp" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "udp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_dns_tcp" {
+  security_group_id = aws_security_group.bastion.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "control_plane_ssh_from_bastion" {
   security_group_id            = aws_security_group.control_plane.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -232,6 +263,22 @@ resource "aws_vpc_security_group_egress_rule" "control_plane_https_outbound" {
   ip_protocol       = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "control_plane_dns_udp" {
+  security_group_id = aws_security_group.control_plane.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "udp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "control_plane_dns_tcp" {
+  security_group_id = aws_security_group.control_plane.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "worker_ssh_from_bastion" {
   security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -272,6 +319,22 @@ resource "aws_vpc_security_group_egress_rule" "worker_https_outbound" {
   ip_protocol       = "tcp"
 }
 
+resource "aws_vpc_security_group_egress_rule" "worker_dns_udp" {
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "udp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "worker_dns_tcp" {
+  security_group_id = aws_security_group.worker.id
+  cidr_ipv4         = "10.0.0.2/32"
+  from_port         = 53
+  to_port           = 53
+  ip_protocol       = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "k8s_nodes_vxlan_from_nodes" {
   security_group_id            = aws_security_group.k8s_nodes.id
   referenced_security_group_id = aws_security_group.k8s_nodes.id
@@ -286,4 +349,60 @@ resource "aws_vpc_security_group_egress_rule" "k8s_nodes_vxlan_to_nodes" {
   from_port                    = 4789
   to_port                      = 4789
   ip_protocol                  = "udp"
+}
+
+resource "aws_key_pair" "main" {
+  key_name   = "${var.project_name}-kubernetes"
+  public_key = var.ssh_public_key
+}
+
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.bastion_instance_type
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  key_name               = aws_key_pair.main.key_name
+
+  tags = {
+    Name = "${var.project_name}-bastion"
+  }
+}
+
+resource "aws_eip" "bastion" {
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.project_name}-bastion"
+  }
+}
+
+resource "aws_eip_association" "bastion" {
+  instance_id   = aws_instance.bastion.id
+  allocation_id = aws_eip.bastion.id
+}
+
+resource "aws_instance" "kubernetes" {
+  for_each = {
+    control_plane = "control-plane"
+    worker_1      = "worker-1"
+    worker_2      = "worker-2"
+  }
+
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.kubernetes_instance_type
+  subnet_id     = aws_subnet.kubernetes.id
+  key_name      = aws_key_pair.main.key_name
+
+  vpc_security_group_ids = each.key == "control_plane" ? [
+    aws_security_group.control_plane.id,
+    aws_security_group.k8s_nodes.id,
+    ] : [
+    aws_security_group.worker.id,
+    aws_security_group.k8s_nodes.id,
+  ]
+
+  tags = {
+    Name = "${var.project_name}-${each.value}"
+    Role = each.value == "control-plane" ? "control-plane" : "worker"
+  }
 }
