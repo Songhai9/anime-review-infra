@@ -198,23 +198,6 @@ resource "aws_vpc_security_group_egress_rule" "bastion_https_outbound" {
   to_port           = 443
   ip_protocol       = "tcp"
 }
-
-resource "aws_vpc_security_group_egress_rule" "bastion_dns_udp" {
-  security_group_id = aws_security_group.bastion.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "udp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "bastion_dns_tcp" {
-  security_group_id = aws_security_group.bastion.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "tcp"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "control_plane_ssh_from_bastion" {
   security_group_id            = aws_security_group.control_plane.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -263,22 +246,6 @@ resource "aws_vpc_security_group_egress_rule" "control_plane_https_outbound" {
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "control_plane_dns_udp" {
-  security_group_id = aws_security_group.control_plane.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "udp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "control_plane_dns_tcp" {
-  security_group_id = aws_security_group.control_plane.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "tcp"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "worker_ssh_from_bastion" {
   security_group_id            = aws_security_group.worker.id
   referenced_security_group_id = aws_security_group.bastion.id
@@ -318,23 +285,6 @@ resource "aws_vpc_security_group_egress_rule" "worker_https_outbound" {
   to_port           = 443
   ip_protocol       = "tcp"
 }
-
-resource "aws_vpc_security_group_egress_rule" "worker_dns_udp" {
-  security_group_id = aws_security_group.worker.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "udp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "worker_dns_tcp" {
-  security_group_id = aws_security_group.worker.id
-  cidr_ipv4         = "10.0.0.2/32"
-  from_port         = 53
-  to_port           = 53
-  ip_protocol       = "tcp"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "k8s_nodes_vxlan_from_nodes" {
   security_group_id            = aws_security_group.k8s_nodes.id
   referenced_security_group_id = aws_security_group.k8s_nodes.id
