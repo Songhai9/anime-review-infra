@@ -38,7 +38,7 @@ validating_job:
   extends: .aws_oidc
   stage: validate
   script:
-    - cd terraform
+    - cd legacy/vm/terraform
     - terraform init
     - terraform fmt -check
     - terraform validate
@@ -47,12 +47,12 @@ planning_job:
   extends: .aws_oidc
   stage: plan
   script:
-    - cd terraform
+    - cd legacy/vm/terraform
     - terraform init
     - terraform plan -out=tfplan
   artifacts:
     paths:
-      - terraform/tfplan
+      - legacy/vm/terraform/tfplan
     expire_in: 1 hour
 
 provisioning_job:
@@ -62,7 +62,7 @@ provisioning_job:
     - job: planning_job
       artifacts: true
   script:
-    - cd terraform
+    - cd legacy/vm/terraform
     - terraform init
     - terraform apply -auto-approve tfplan
 
@@ -77,8 +77,8 @@ configuring_job:
     - if: "$IMAGE_TAG"
 
   script:
-    - terraform -chdir=terraform init
-    - bash ansible/scripts/generate_inventory.sh
+    - terraform -chdir=legacy/vm/terraform init
+    - bash legacy/vm/ansible/scripts/generate_inventory.sh
 
     - mkdir -p ~/.ssh
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
@@ -89,29 +89,31 @@ configuring_job:
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -i ~/.ssh/anime-review \
-        ubuntu@"$(terraform -chdir=terraform output -raw bastion_eip)" \
+        -l ubuntu \
+        "$(terraform -chdir=legacy/vm/terraform output -raw bastion_eip)" \
         "echo BASTION_OK"
 
-    - ansible-galaxy collection install -r ansible/requirements.yml
+    - ansible-galaxy collection install -r legacy/vm/ansible/requirements.yml
 
-    - cat ansible/inventory/inventory.ini
+    - cat legacy/vm/ansible/inventory/inventory.ini
 
     - |
       ansible private \
-        -i ansible/inventory/inventory.ini \
+        -i legacy/vm/ansible/inventory/inventory.ini \
         -m wait_for_connection \
         -a "timeout=300" \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
 
     - |
       ansible private \
-        -i ansible/inventory/inventory.ini \
+        -i legacy/vm/ansible/inventory/inventory.ini \
         -m ping \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
 
     - |
       ansible-playbook \
-        -i ansible/inventory/inventory.ini \
-        ansible/playbooks/site.yml \
+        -i legacy/vm/ansible/inventory/inventory.ini \
+        -e "image_tag=$IMAGE_TAG" \
+        legacy/vm/ansible/playbooks/site.yml \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
         -e "image_tag=$IMAGE_TAG"
