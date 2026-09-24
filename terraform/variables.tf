@@ -34,6 +34,11 @@ variable "kubernetes_subnet_cidr" {
   default     = "10.0.10.0/24"
 }
 
+variable "admin_cidr" {
+  description = "CIDR allowed to access the bastion over SSH"
+  type        = string
+}
+
 variable "availability_zone" {
   description = "Availability Zone used by the public and Kubernetes subnets"
   type        = string
