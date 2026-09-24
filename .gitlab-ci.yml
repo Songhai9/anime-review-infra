@@ -113,7 +113,6 @@ configuring_job:
     - |
       ansible-playbook \
         -i legacy/vm/ansible/inventory/inventory.ini \
-        -e "image_tag=$IMAGE_TAG" \
-        legacy/vm/ansible/playbooks/site.yml \
         --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
-        -e "image_tag=$IMAGE_TAG"
+        -e "image_tag=$IMAGE_TAG" \
+        legacy/vm/ansible/playbooks/site.yml

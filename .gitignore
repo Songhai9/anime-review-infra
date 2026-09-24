@@ -1,11 +1,10 @@
 terraform/.terraform
 terraform/*.tfstate
 terraform/*.tfstate/*
-terraform/modules/
 terraform.tfvars
 *.auto.tfvars
 *.tfstate
 *.tfstate.*
 .terraform/
 **/.terraform/
-ansible/inventory/inventory.ini
+**/ansible/inventory/inventory.ini
