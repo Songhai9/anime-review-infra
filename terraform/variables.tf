@@ -37,4 +37,5 @@ variable "kubernetes_subnet_cidr" {
 variable "availability_zone" {
   description = "Availability Zone used by the public and Kubernetes subnets"
   type        = string
+  default     = "eu-north-1a"
 }
