@@ -2,6 +2,9 @@ terraform/.terraform
 terraform/*.tfstate
 terraform/*.tfstate/*
 terraform.tfvars
+**/terraform.tfvars
+**/terraform/*.tfvars
+**/terraform/*.tfvars.json
 *.auto.tfvars
 *.tfstate
 *.tfstate.*
