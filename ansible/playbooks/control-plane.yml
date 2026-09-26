@@ -11,6 +11,17 @@
     kubeconfig_path: /home/ubuntu/.kube/config
 
   tasks:
+    - name: Install kubectl
+      ansible.builtin.apt:
+        name: kubectl
+        state: present
+        update_cache: true
+
+    - name: Hold kubectl package
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: hold
+
     - name: Initialize the Kubernetes control plane
       ansible.builtin.command:
         cmd: >-

@@ -32,6 +32,9 @@ worker-2 ansible_host=$WORKER_2_PRIVATE_IP
 ansible_user=ubuntu
 ansible_ssh_private_key_file=~/.ssh/anime-review
 
+[bastion:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
+
 [k8s_nodes:children]
 control_plane
 workers
