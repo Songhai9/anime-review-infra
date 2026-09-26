@@ -1,10 +1,11 @@
+---
 - name: Prepare Kubernetes nodes
   hosts: k8s_nodes
   become: true
   gather_facts: true
 
   vars:
-    kubernetes_minor_version: "v1.37"
+    kubernetes_minor_version: "v1.36"
     kubernetes_apt_key_url: >-
       https://pkgs.k8s.io/core:/stable:/{{ kubernetes_minor_version }}/deb/Release.key
     kubernetes_apt_repository: >-

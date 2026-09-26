@@ -1,3 +1,4 @@
+---
 - name: Check Kubernetes worker membership
   hosts: workers
   become: true
@@ -13,15 +14,6 @@
   hosts: control_plane
   become: true
   gather_facts: false
-
-  vars:
-    workers_need_join: >-
-      {{
-        groups['workers']
-        | select('in', hostvars)
-        | select('worker_needs_join', hostvars)
-        | list
-      }}
 
   tasks:
     - name: Determine whether at least one worker needs to join
