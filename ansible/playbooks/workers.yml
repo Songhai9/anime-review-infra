@@ -2,7 +2,7 @@
 - name: Check Kubernetes worker membership
   hosts: workers
   become: true
-  gather_facts: false
+  gather_facts: true
 
   tasks:
     - name: Check whether the worker is already joined
@@ -56,3 +56,39 @@
       when: not kubelet_config.stat.exists
       changed_when: true
       no_log: true
+
+- name: Label Kubernetes workers
+  hosts: control_plane
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check worker node labels
+      ansible.builtin.command:
+        cmd: >-
+          kubectl get node {{ hostvars[item].ansible_facts["hostname"] }}
+          --output=json
+          --kubeconfig /etc/kubernetes/admin.conf
+      loop: "{{ groups['workers'] }}"
+      register: worker_node_info
+      changed_when: false
+
+    - name: Label worker nodes
+      ansible.builtin.command:
+        cmd: >-
+          kubectl label node
+          {{ hostvars[item].ansible_facts["hostname"] }}
+          node-role.kubernetes.io/worker=
+          --overwrite
+          --kubeconfig /etc/kubernetes/admin.conf
+      loop: "{{ groups['workers'] }}"
+      loop_control:
+        index_var: index
+      when: >-
+        (
+          (
+            (worker_node_info.results[index].stdout | from_json)
+            .metadata.labels
+            | default({})
+          ).get('node-role.kubernetes.io/worker')
+        ) != ''

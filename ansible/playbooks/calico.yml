@@ -36,6 +36,12 @@
       changed_when: false
       failed_when: false
 
+    - name: Install Tigera Operator
+      ansible.builtin.command:
+        cmd: kubectl apply -f {{ calico_operator_url }}
+      when: tigera_operator.rc != 0
+      changed_when: tigera_operator.rc != 0
+
     - name: Check Tigera Operator drift
       ansible.builtin.command:
         cmd: kubectl diff -f {{ calico_operator_url }}
@@ -43,11 +49,13 @@
       changed_when: false
       failed_when: tigera_operator_diff.rc not in [0, 1]
 
-    - name: Install Tigera Operator
+    - name: Apply Tigera Operator drift
       ansible.builtin.command:
         cmd: kubectl apply -f {{ calico_operator_url }}
-      when: tigera_operator.rc != 0 or tigera_operator_diff.rc == 1
-      changed_when: tigera_operator.rc != 0 or tigera_operator_diff.rc == 1
+      when:
+        - tigera_operator.rc == 0
+        - tigera_operator_diff.rc == 1
+      changed_when: true
 
     - name: Wait for Tigera Operator
       ansible.builtin.command:
@@ -86,6 +94,7 @@
       ansible.builtin.command:
         cmd: kubectl apply -f {{ calico_installation_path }}
       when: calico_diff.rc == 1
+      changed_when: calico_diff.rc == 1
 
     - name: Wait until all Kubernetes nodes are ready
       ansible.builtin.command:
