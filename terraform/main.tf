@@ -334,10 +334,10 @@ resource "aws_instance" "kubernetes" {
     worker_2      = "worker-2"
   }
 
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = var.kubernetes_instance_type
-  subnet_id     = aws_subnet.kubernetes.id
-  key_name      = aws_key_pair.main.key_name
+  ami                  = data.aws_ami.ubuntu.id
+  instance_type        = var.kubernetes_instance_type
+  subnet_id            = aws_subnet.kubernetes.id
+  key_name             = aws_key_pair.main.key_name
   iam_instance_profile = each.key == "control_plane" ? null : aws_iam_instance_profile.kubernetes_worker.name
 
   vpc_security_group_ids = each.key == "control_plane" ? [
@@ -347,6 +347,12 @@ resource "aws_instance" "kubernetes" {
     aws_security_group.worker.id,
     aws_security_group.k8s_nodes.id,
   ]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
 
   tags = {
     Name = "${var.project_name}-${each.value}"
@@ -373,7 +379,7 @@ resource "aws_vpc_security_group_egress_rule" "k8s_nodes_typha_to_nodes" {
 }
 
 resource "aws_iam_role" "kubernetes_worker" {
-  name = "kubernetes-worker"
+  name = "${var.project_name}-kubernetes-worker"
 
   # Terraform's "jsonencode" function converts a
   # Terraform expression result to valid JSON syntax.
@@ -402,6 +408,6 @@ resource "aws_iam_role_policy_attachment" "kubernetes_worker" {
 }
 
 resource "aws_iam_instance_profile" "kubernetes_worker" {
-  name = "kubernetes-worker-profile"
+  name = "${var.project_name}-kubernetes-worker-profile"
   role = aws_iam_role.kubernetes_worker.name
 }
