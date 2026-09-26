@@ -338,6 +338,7 @@ resource "aws_instance" "kubernetes" {
   instance_type = var.kubernetes_instance_type
   subnet_id     = aws_subnet.kubernetes.id
   key_name      = aws_key_pair.main.key_name
+  iam_instance_profile = each.key == "control_plane" ? null : aws_iam_instance_profile.kubernetes_worker.name
 
   vpc_security_group_ids = each.key == "control_plane" ? [
     aws_security_group.control_plane.id,
@@ -369,4 +370,38 @@ resource "aws_vpc_security_group_egress_rule" "k8s_nodes_typha_to_nodes" {
   ip_protocol = "tcp"
   from_port   = 5473
   to_port     = 5473
+}
+
+resource "aws_iam_role" "kubernetes_worker" {
+  name = "kubernetes-worker"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-kubernetes-worker"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "kubernetes_worker" {
+  role       = aws_iam_role.kubernetes_worker.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEBSCSIDriverPolicyV2"
+}
+
+resource "aws_iam_instance_profile" "kubernetes_worker" {
+  name = "kubernetes-worker-profile"
+  role = aws_iam_role.kubernetes_worker.name
 }
