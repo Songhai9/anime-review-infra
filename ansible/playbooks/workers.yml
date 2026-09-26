@@ -1,0 +1,66 @@
+- name: Check Kubernetes worker membership
+  hosts: workers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check whether the worker is already joined
+      ansible.builtin.stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: kubelet_config
+
+- name: Generate worker join command when required
+  hosts: control_plane
+  become: true
+  gather_facts: false
+
+  vars:
+    workers_need_join: >-
+      {{
+        groups['workers']
+        | select('in', hostvars)
+        | select('worker_needs_join', hostvars)
+        | list
+      }}
+
+  tasks:
+    - name: Determine whether at least one worker needs to join
+      ansible.builtin.set_fact:
+        worker_join_required: >-
+          {{
+            groups['workers']
+            | map('extract', hostvars, 'kubelet_config')
+            | map(attribute='stat.exists')
+            | select('equalto', false)
+            | list
+            | length > 0
+          }}
+
+    - name: Generate temporary worker join command
+      ansible.builtin.command:
+        cmd: kubeadm token create --ttl 15m --print-join-command
+      register: generated_join_command
+      when: worker_join_required
+      no_log: true
+
+    - name: Store worker join command
+      ansible.builtin.set_fact:
+        worker_join_command: "{{ generated_join_command.stdout }}"
+      when: worker_join_required
+      no_log: true
+
+- name: Join Kubernetes workers to the cluster
+  hosts: workers
+  become: true
+  gather_facts: false
+
+  vars:
+    control_plane_host: "{{ groups['control_plane'][0] }}"
+
+  tasks:
+    - name: Join worker to Kubernetes cluster
+      ansible.builtin.command:
+        cmd: "{{ hostvars[control_plane_host].worker_join_command }}"
+      when: not kubelet_config.stat.exists
+      changed_when: true
+      no_log: true

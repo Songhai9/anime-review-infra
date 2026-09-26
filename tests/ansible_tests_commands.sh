@@ -9,6 +9,7 @@ INVENTORY_FILE="$ANSIBLE_DIR/inventory/inventory.ini"
 REQUIREMENTS_FILE="$ANSIBLE_DIR/requirements.yml"
 COMMON_PLAYBOOK="$ANSIBLE_DIR/playbooks/common.yml"
 CONTROL_PLANE_PLAYBOOK="$ANSIBLE_DIR/playbooks/control-plane.yml"
+WORKERS_PLAYBOOK="$ANSIBLE_DIR/playbooks/workers.yml"
 
 ansible all \
   -i "$INVENTORY_FILE" \
@@ -25,6 +26,10 @@ ansible-playbook \
   -i "$INVENTORY_FILE" \
   "$CONTROL_PLANE_PLAYBOOK"
 
+ansible-playbook \
+  -i "$INVENTORY_FILE" \
+  "$WORKERS_PLAYBOOK"
+
 # Kubernetes tests
 
 ansible control_plane \
@@ -40,3 +45,7 @@ ansible control_plane \
   -b \
   -m shell \
   -a "ss -lntp | grep 6443"
+
+ansible control_plane \
+  -i ansible/inventory/inventory.ini \
+  -a "kubectl get pods -n calico-system -o wide"

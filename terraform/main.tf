@@ -111,7 +111,6 @@ resource "aws_security_group" "bastion" {
   name        = "${var.project_name}-bastion-sg"
   description = "Security group for the bastion host"
   vpc_id      = aws_vpc.main.id
-  egress      = []
 
   tags = {
     Name = "${var.project_name}-bastion-sg"
@@ -122,7 +121,6 @@ resource "aws_security_group" "control_plane" {
   name        = "${var.project_name}-control-plane-sg"
   description = "Security group for the Kubernetes control plane"
   vpc_id      = aws_vpc.main.id
-  egress      = []
 
   tags = {
     Name = "${var.project_name}-control-plane-sg"
@@ -133,7 +131,6 @@ resource "aws_security_group" "worker" {
   name        = "${var.project_name}-worker-sg"
   description = "Security group for Kubernetes workers"
   vpc_id      = aws_vpc.main.id
-  egress      = []
 
   tags = {
     Name = "${var.project_name}-worker-sg"
@@ -144,7 +141,6 @@ resource "aws_security_group" "k8s_nodes" {
   name        = "${var.project_name}-k8s-nodes-sg"
   description = "Shared Kubernetes node overlay network traffic"
   vpc_id      = aws_vpc.main.id
-  egress      = []
 
   tags = {
     Name = "${var.project_name}-k8s-nodes-sg"
@@ -355,4 +351,22 @@ resource "aws_instance" "kubernetes" {
     Name = "${var.project_name}-${each.value}"
     Role = each.value == "control-plane" ? "control-plane" : "worker"
   }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "k8s_nodes_typha_from_nodes" {
+  security_group_id            = aws_security_group.k8s_nodes.id
+  referenced_security_group_id = aws_security_group.k8s_nodes.id
+
+  ip_protocol = "tcp"
+  from_port   = 5473
+  to_port     = 5473
+}
+
+resource "aws_vpc_security_group_egress_rule" "k8s_nodes_typha_to_nodes" {
+  security_group_id            = aws_security_group.k8s_nodes.id
+  referenced_security_group_id = aws_security_group.k8s_nodes.id
+
+  ip_protocol = "tcp"
+  from_port   = 5473
+  to_port     = 5473
 }

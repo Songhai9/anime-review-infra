@@ -1,4 +1,3 @@
----
 - name: Prepare Kubernetes nodes
   hosts: k8s_nodes
   become: true

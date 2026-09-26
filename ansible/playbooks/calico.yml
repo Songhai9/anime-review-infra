@@ -1,0 +1,104 @@
+---
+- name: Install Calico CNI
+  hosts: control_plane
+  gather_facts: false
+
+  vars:
+    calico_version: "v3.32.2"
+    kubernetes_pod_cidr: "192.168.0.0/16"
+
+    calico_crds_url: >-
+      https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/v1_crd_projectcalico_org.yaml
+
+    calico_operator_url: >-
+      https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml
+
+    calico_installation_path: /home/ubuntu/calico-installation.yml
+
+  tasks:
+    - name: Check whether Calico CRDs are installed
+      ansible.builtin.command:
+        cmd: kubectl get crd bgpconfigurations.crd.projectcalico.org
+      register: calico_crds
+      changed_when: false
+      failed_when: false
+
+    - name: Install Calico CRDs
+      ansible.builtin.command:
+        cmd: kubectl create -f {{ calico_crds_url }}
+      when: calico_crds.rc != 0
+      changed_when: true
+
+    - name: Check whether Tigera Operator is installed
+      ansible.builtin.command:
+        cmd: kubectl get deployment tigera-operator -n tigera-operator
+      register: tigera_operator
+      changed_when: false
+      failed_when: false
+
+    - name: Check Tigera Operator drift
+      ansible.builtin.command:
+        cmd: kubectl diff -f {{ calico_operator_url }}
+      register: tigera_operator_diff
+      changed_when: false
+      failed_when: tigera_operator_diff.rc not in [0, 1]
+
+    - name: Install Tigera Operator
+      ansible.builtin.command:
+        cmd: kubectl apply -f {{ calico_operator_url }}
+      when: tigera_operator.rc != 0 or tigera_operator_diff.rc == 1
+      changed_when: tigera_operator.rc != 0 or tigera_operator_diff.rc == 1
+
+    - name: Wait for Tigera Operator
+      ansible.builtin.command:
+        cmd: >-
+          kubectl rollout status
+          deployment/tigera-operator
+          -n tigera-operator
+          --timeout=180s
+      changed_when: false
+
+    - name: Wait for Calico Installation CRD
+      ansible.builtin.command:
+        cmd: kubectl get crd installations.operator.tigera.io
+      register: installation_crd
+      until: installation_crd.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Render Calico installation configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir | dirname }}/templates/calico-installation.yml.j2"
+        dest: "{{ calico_installation_path }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: "0644"
+
+    - name: Check Calico installation drift
+      ansible.builtin.command:
+        cmd: kubectl diff -f {{ calico_installation_path }}
+      register: calico_diff
+      changed_when: false
+      failed_when: calico_diff.rc not in [0, 1]
+
+    - name: Apply Calico installation
+      ansible.builtin.command:
+        cmd: kubectl apply -f {{ calico_installation_path }}
+      when: calico_diff.rc == 1
+
+    - name: Wait until all Kubernetes nodes are ready
+      ansible.builtin.command:
+        cmd: kubectl wait --for=condition=Ready nodes --all --timeout=300s
+      changed_when: false
+
+    - name: Wait for CoreDNS pods
+      ansible.builtin.command:
+        cmd: >-
+          kubectl wait
+          --for=condition=Ready
+          pod
+          -l k8s-app=kube-dns
+          -n kube-system
+          --timeout=300s
+      changed_when: false
