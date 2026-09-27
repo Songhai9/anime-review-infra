@@ -377,6 +377,148 @@ resource "aws_vpc_security_group_egress_rule" "k8s_nodes_typha_to_nodes" {
   from_port   = 5473
   to_port     = 5473
 }
+resource "aws_security_group" "nlb_sg" {
+  name        = "allow_k8s_nodes_ingress"
+  description = "Allow inbound traffic to k8s nodes"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "allow_k8s_nodes"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allows_http_to_k8s_http" {
+  security_group_id            = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.nlb_sg.id
+  from_port                    = 30080
+  ip_protocol                  = "tcp"
+  to_port                      = 30080
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allows_http_to_k8s_https" {
+  security_group_id            = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.nlb_sg.id
+  from_port                    = 30443
+  ip_protocol                  = "tcp"
+  to_port                      = 30443
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allows_http_to_nlb_https" {
+  security_group_id = aws_security_group.nlb_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allows_http_to_nlb_http" {
+  security_group_id = aws_security_group.nlb_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  ip_protocol       = "tcp"
+  to_port           = 80
+}
+
+resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers_http" {
+  security_group_id            = aws_security_group.nlb_sg.id
+  referenced_security_group_id = aws_security_group.worker.id
+  from_port                    = 30080
+  to_port                      = 30080
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers_https" {
+  security_group_id            = aws_security_group.nlb_sg.id
+  referenced_security_group_id = aws_security_group.worker.id
+  from_port                    = 30443
+  to_port                      = 30443
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_lb" "main" {
+  name               = "anilist-nlb"
+  internal           = false
+  load_balancer_type = "network"
+  security_groups    = [aws_security_group.nlb_sg.id]
+  subnets            = [aws_subnet.public.id]
+
+  tags = {
+    Name = "${var.project_name}-infra-nlb"
+  }
+
+}
+
+resource "aws_lb_target_group" "ingress_http" {
+  name        = "${var.project_name}-ingress-http"
+  port        = 30080
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.main.id
+
+  health_check {
+    protocol = "TCP"
+    port     = "traffic-port"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "ingress_http_workers" {
+  for_each = {
+    for key, instance in aws_instance.kubernetes :
+    key => instance
+    if key != "control_plane"
+  }
+
+  target_group_arn = aws_lb_target_group.ingress_http.arn
+  target_id        = each.value.id
+  port             = 30080
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ingress_http.arn
+  }
+}
+
+resource "aws_lb_target_group" "ingress_https" {
+  name        = "${var.project_name}-ingress-https"
+  port        = 30443
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.main.id
+
+  health_check {
+    protocol = "TCP"
+    port     = "traffic-port"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "ingress_https_workers" {
+  for_each = {
+    for key, instance in aws_instance.kubernetes :
+    key => instance
+    if key != "control_plane"
+  }
+
+  target_group_arn = aws_lb_target_group.ingress_https.arn
+  target_id        = each.value.id
+  port             = 30443
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ingress_https.arn
+  }
+}
 
 resource "aws_iam_role" "kubernetes_worker" {
   name = "${var.project_name}-kubernetes-worker"
