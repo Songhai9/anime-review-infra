@@ -1,0 +1,15 @@
+---
+- name: Prepare Kubernetes nodes
+  ansible.builtin.import_playbook: common.yml
+
+- name: Initialize control plane
+  ansible.builtin.import_playbook: control-plane.yml
+
+- name: Join worker nodes
+  ansible.builtin.import_playbook: workers.yml
+
+- name: Install Calico
+  ansible.builtin.import_playbook: calico.yml
+
+- name: Install admin tools
+  ansible.builtin.import_playbook: admin-tools.yml
