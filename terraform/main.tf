@@ -354,6 +354,12 @@ resource "aws_instance" "kubernetes" {
     http_put_response_hop_limit = 2
   }
 
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20
+    delete_on_termination = true
+  }
+
   tags = {
     Name = "${var.project_name}-${each.value}"
     Role = each.value == "control-plane" ? "control-plane" : "worker"
@@ -388,39 +394,39 @@ resource "aws_security_group" "nlb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_http_from_nlb" {
-  security_group_id = aws_security_group.worker.id
-  referenced_security_group_id = aws_security_group.nlb_sg.id
-  from_port         = 30080
-  ip_protocol       = "tcp"
-  to_port           = 30080
+  security_group_id            = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.nlb.id
+  from_port                    = 30080
+  ip_protocol                  = "tcp"
+  to_port                      = 30080
 }
 
 resource "aws_vpc_security_group_ingress_rule" "worker_https_from_nlb" {
-  security_group_id = aws_security_group.worker.id
-  referenced_security_group_id = aws_security_group.nlb_sg.id
-  from_port         = 30443
-  ip_protocol       = "tcp"
-  to_port           = 30443
+  security_group_id            = aws_security_group.worker.id
+  referenced_security_group_id = aws_security_group.nlb.id
+  from_port                    = 30443
+  ip_protocol                  = "tcp"
+  to_port                      = 30443
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nlb_https_from_internet" {
-  security_group_id = aws_security_group.nlb_sg.id
-  cidr_ipv4 = "0.0.0.0/0"
+  security_group_id = aws_security_group.nlb.id
+  cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   ip_protocol       = "tcp"
   to_port           = 443
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nlb_http_from_internet" {
-  security_group_id = aws_security_group.nlb_sg.id
-  cidr_ipv4 = "0.0.0.0/0"
+  security_group_id = aws_security_group.nlb.id
+  cidr_ipv4         = "0.0.0.0/0"
   from_port         = 80
   ip_protocol       = "tcp"
   to_port           = 80
 }
 
 resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers" {
-  security_group_id            = aws_security_group.nlb_sg.id
+  security_group_id            = aws_security_group.nlb.id
   referenced_security_group_id = aws_security_group.worker.id
   from_port                    = 30080
   to_port                      = 30080
@@ -428,7 +434,7 @@ resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "nlb_https_to_workers" {
-  security_group_id            = aws_security_group.nlb_sg.id
+  security_group_id            = aws_security_group.nlb.id
   referenced_security_group_id = aws_security_group.worker.id
   from_port                    = 30443
   to_port                      = 30443
@@ -439,7 +445,7 @@ resource "aws_lb" "main" {
   name               = "anilist-nlb"
   internal           = false
   load_balancer_type = "network"
-  security_groups    = [aws_security_group.nlb_sg.id]
+  security_groups    = [aws_security_group.nlb.id]
   subnets            = [aws_subnet.public.id]
 
   tags = {
