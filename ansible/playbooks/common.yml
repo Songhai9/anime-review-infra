@@ -8,16 +8,13 @@
     kubernetes_minor_version: "v1.36"
     kubernetes_apt_key_url: >-
       https://pkgs.k8s.io/core:/stable:/{{ kubernetes_minor_version }}/deb/Release.key
-    kubernetes_apt_repository: >-
-      deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc]
-      https://pkgs.k8s.io/core:/stable:/{{ kubernetes_minor_version }}/deb/ /
 
   tasks:
 
     - name: Disable swap immediately
       ansible.builtin.command:
         cmd: swapoff -a
-      when: ansible_swaptotal_mb | int > 0
+      when: ansible_facts["swaptotal_mb"] | int > 0
       changed_when: true
 
     - name: Disable swap permanently
@@ -118,6 +115,7 @@
         name:
           - ca-certificates
           - apt-transport-https
+          - python3-debian
         state: present
         update_cache: true
         cache_valid_time: 3600
@@ -139,11 +137,21 @@
         mode: "0644"
 
     - name: Configure Kubernetes APT repository
-      ansible.builtin.apt_repository:
-        repo: "{{ kubernetes_apt_repository }}"
-        filename: kubernetes
+      ansible.builtin.deb822_repository:
+        name: kubernetes
+        types:
+          - deb
+        uris:
+          - "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_minor_version }}/deb/"
+        suites:
+          - /
+        signed_by: /etc/apt/keyrings/kubernetes-apt-keyring.asc
         state: present
+
+    - name: Update APT cache after adding Kubernetes repository
+      ansible.builtin.apt:
         update_cache: true
+        cache_valid_time: 3600
 
     - name: Install kubelet and kubeadm
       ansible.builtin.apt:
