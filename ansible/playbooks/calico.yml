@@ -42,18 +42,17 @@
       when: tigera_operator.rc != 0
       changed_when: tigera_operator.rc != 0
 
-    - name: Apply Tigera Operator drift
+    - name: Check Tigera Operator drift
       ansible.builtin.command:
-        cmd: kubectl apply -f {{ calico_operator_url }}
-      when: tigera_operator_diff.rc == 1
-      changed_when: true
+        cmd: kubectl diff -f {{ calico_operator_url }}
+      register: tigera_operator_diff
+      changed_when: false
+      failed_when: tigera_operator_diff.rc not in [0, 1]
 
     - name: Apply Tigera Operator drift
       ansible.builtin.command:
         cmd: kubectl apply -f {{ calico_operator_url }}
-      when:
-        - tigera_operator.rc == 0
-        - tigera_operator_diff.rc == 1
+      when: tigera_operator_diff.rc == 1
       changed_when: true
 
     - name: Wait for Tigera Operator
