@@ -424,6 +424,21 @@ resource "aws_vpc_security_group_ingress_rule" "nlb_http_from_internet" {
   ip_protocol       = "tcp"
   to_port           = 80
 }
+resource "aws_vpc_security_group_ingress_rule" "ingress_between_workers" {
+  security_group_id = aws_security_group.k8s_nodes.id
+  referenced_security_group_id = aws_security_group.k8s_nodes.id
+  from_port         = 10250
+  ip_protocol       = "tcp"
+  to_port           = 10250
+}
+
+resource "aws_vpc_security_group_egress_rule" "egress_between_workers" {
+  security_group_id = aws_security_group.k8s_nodes.id
+  referenced_security_group_id = aws_security_group.k8s_nodes.id
+  from_port         = 10250
+  ip_protocol       = "tcp"
+  to_port           = 10250
+}
 
 resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers" {
   security_group_id            = aws_security_group.nlb.id
