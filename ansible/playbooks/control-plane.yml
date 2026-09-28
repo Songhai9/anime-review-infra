@@ -26,7 +26,7 @@
       ansible.builtin.command:
         cmd: >-
           kubeadm init
-          --apiserver-advertise-address={{ ansible_host }}
+          --apiserver-advertise-address={{ node_private_ip }}
           --pod-network-cidr={{ kubernetes_pod_cidr }}
       args:
         creates: /etc/kubernetes/admin.conf

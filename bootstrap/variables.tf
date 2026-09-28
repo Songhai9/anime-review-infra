@@ -19,3 +19,9 @@ variable "gitlab_infra_project_path" {
   type        = string
   default     = "anilist-cicd/anilist-infra"
 }
+
+variable "ansible_ssm_bucket_name" {
+  description = "Temporary S3 bucket used by Ansible over AWS SSM"
+  type        = string
+  default     = "songhai9-anime-review-ansible-ssm-0909-eu-north-1"
+}

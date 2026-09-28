@@ -13,6 +13,8 @@ variables:
   AWS_REGION: "eu-north-1"
   AWS_DEFAULT_REGION: "eu-north-1"
 
+  ANSIBLE_SSM_BUCKET: "songhai9-anime-review-ansible-ssm-0909-eu-north-1"
+
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

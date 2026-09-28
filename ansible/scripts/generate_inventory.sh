@@ -6,40 +6,35 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/../../terraform"
 INVENTORY_DIR="$SCRIPT_DIR/../inventory"
 
+: "${ANSIBLE_SSM_BUCKET:?ANSIBLE_SSM_BUCKET must be set}"
+
 cd "$TERRAFORM_DIR"
 
-BASTION_EIP=$(terraform output -raw bastion_public_ip)
+CONTROL_PLANE_INSTANCE_ID=$(terraform output -raw control_plane_instance_id)
 CONTROL_PLANE_PRIVATE_IP=$(terraform output -raw control_plane_private_ip)
+
+WORKER_1_INSTANCE_ID=$(terraform output -json | jq -r '.worker_instance_ids.value.worker_1')
+WORKER_2_INSTANCE_ID=$(terraform output -json | jq -r '.worker_instance_ids.value.worker_2')
+
 WORKER_1_PRIVATE_IP=$(terraform output -json | jq -r '.worker_private_ips.value.worker_1')
 WORKER_2_PRIVATE_IP=$(terraform output -json | jq -r '.worker_private_ips.value.worker_2')
 
 mkdir -p "$INVENTORY_DIR"
 
-cd "$INVENTORY_DIR"
-
-cat > inventory.ini <<EOF
-[bastion]
-$BASTION_EIP
-
+cat > "$INVENTORY_DIR/inventory.ini" <<EOF
 [control_plane]
-control-plane ansible_host=$CONTROL_PLANE_PRIVATE_IP
+control-plane ansible_host=$CONTROL_PLANE_INSTANCE_ID node_private_ip=$CONTROL_PLANE_PRIVATE_IP
 
 [workers]
-worker-1 ansible_host=$WORKER_1_PRIVATE_IP
-worker-2 ansible_host=$WORKER_2_PRIVATE_IP
-
-[all:vars]
-ansible_user=ubuntu
-ansible_ssh_private_key_file=~/.ssh/anime-review
-
-[bastion:vars]
-ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
+worker-1 ansible_host=$WORKER_1_INSTANCE_ID node_private_ip=$WORKER_1_PRIVATE_IP
+worker-2 ansible_host=$WORKER_2_INSTANCE_ID node_private_ip=$WORKER_2_PRIVATE_IP
 
 [k8s_nodes:children]
 control_plane
 workers
 
 [k8s_nodes:vars]
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/anime-review -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$BASTION_EIP"'
-
+ansible_connection=amazon.aws.aws_ssm
+ansible_aws_ssm_region=eu-north-1
+ansible_aws_ssm_bucket_name=$ANSIBLE_SSM_BUCKET
 EOF

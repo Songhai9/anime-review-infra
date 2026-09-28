@@ -52,3 +52,13 @@ output "k8s_cd_arn" {
   value = aws_iam_role.k8s_cd.arn
 }
 
+output "control_plane_instance_id" {
+  value = aws_instance.kubernetes["control_plane"].id
+}
+
+output "worker_instance_ids" {
+  value = {
+    worker_1 = aws_instance.kubernetes["worker_1"].id
+    worker_2 = aws_instance.kubernetes["worker_2"].id
+  }
+}
