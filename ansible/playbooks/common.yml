@@ -176,6 +176,12 @@
         name: kubelet
         enabled: true
 
+    - name: Install AWS CLI
+      ansible.builtin.apt:
+        name: awscli
+        state: present
+        update_cache: true
+
   handlers:
     - name: Apply sysctl settings
       ansible.builtin.command:
