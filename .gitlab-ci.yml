@@ -10,6 +10,28 @@
     - bash "$ANSIBLE_ROOT/scripts/generate_inventory.sh"
 
     - |
+      echo "Waiting for Kubernetes nodes to become available in SSM..."
+
+      for attempt in $(seq 1 60); do
+        ONLINE_COUNT=$(aws ssm describe-instance-information \
+          --query 'length(InstanceInformationList[?PingStatus==`Online`])' \
+          --output text)
+
+        echo "SSM nodes online: ${ONLINE_COUNT}/3"
+
+        if [ "$ONLINE_COUNT" -ge 3 ]; then
+          break
+        fi
+
+        if [ "$attempt" -eq 60 ]; then
+          echo "Timed out waiting for SSM nodes"
+          exit 1
+        fi
+
+        sleep 10
+      done
+
+    - |
       ansible-playbook \
         -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
         "$ANSIBLE_ROOT/playbooks/site.yml"
