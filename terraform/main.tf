@@ -693,3 +693,8 @@ resource "aws_iam_role_policy" "k8s_cd_ssm" {
     ]
   })
 }
+
+resource "aws_iam_role_policy_attachment" "kubernetes_worker_ssm" {
+  role       = aws_iam_role.kubernetes_worker.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
