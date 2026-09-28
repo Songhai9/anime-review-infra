@@ -614,6 +614,36 @@ resource "aws_iam_role_policy" "k8s_cd" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "K8sBootstrapBucketAccess"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
+
+        Resource = "arn:aws:s3:::${var.k8s_transfer_bucket_name}"
+
+        Condition = {
+          StringLike = {
+            "s3:prefix" = [
+              "k8s-bootstrap/*"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "K8sBootstrapObjectAccess"
+        Effect = "Allow"
+
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+
+        Resource = "arn:aws:s3:::${var.k8s_transfer_bucket_name}/k8s-bootstrap/*"
+      },
+      {
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
@@ -668,16 +698,6 @@ resource "aws_iam_role_policy" "k8s_cd_ssm" {
 
     Statement = [
       {
-        Sid    = "ReadPostgresPassword"
-        Effect = "Allow"
-
-        Action = [
-          "ssm:GetParameter"
-        ]
-
-        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/anime-review/postgres/password"
-      },
-      {
         Effect = "Allow"
 
         Action = [
@@ -707,4 +727,36 @@ resource "aws_iam_role_policy" "k8s_cd_ssm" {
 resource "aws_iam_role_policy_attachment" "kubernetes_worker_ssm" {
   role       = aws_iam_role.kubernetes_worker.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "kubernetes_control_plane_bootstrap" {
+  name = "anime-review-control-plane-bootstrap"
+  role = aws_iam_role.kubernetes_control_plane.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Sid    = "ReadK8sBootstrapArtifact"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject"
+        ]
+
+        Resource = "arn:aws:s3:::${var.k8s_transfer_bucket_name}/k8s-bootstrap/*"
+      },
+      {
+        Sid    = "ReadPostgresPassword"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:GetParameter"
+        ]
+
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/anime-review/postgres/password"
+      }
+    ]
+  })
 }

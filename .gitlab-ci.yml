@@ -31,6 +31,8 @@ variables:
 
   ANSIBLE_SSM_BUCKET: "songhai9-anime-review-ansible-ssm-0909-eu-north-1"
 
+  
+
 workflow:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
@@ -41,6 +43,7 @@ stages:
   - apply
   - configure
   - verify
+  - bootstrap
 
 
 .aws_oidc:
@@ -219,3 +222,23 @@ verify_cluster:
         -b \
         -m shell \
         -a '/usr/bin/kubectl --kubeconfig /etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=120s'
+
+bootstrap_k8s:
+  stage: bootstrap
+
+  needs:
+    - job: verify_cluster
+
+  trigger:
+    project: anilist-cicd/anilist-k8s
+    branch: main
+    strategy: depend
+
+  variables:
+    BOOTSTRAP_CLUSTER: "true"
+  
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - terraform/**/*
+        - ansible/**/*

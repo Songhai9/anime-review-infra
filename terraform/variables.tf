@@ -61,3 +61,9 @@ variable "availability_zone" {
   type        = string
   default     = "eu-north-1a"
 }
+
+variable "k8s_transfer_bucket_name" {
+  description = "S3 bucket used to transfer Kubernetes bootstrap artifacts"
+  type        = string
+  default     = "songhai9-anime-review-ansible-ssm-0909-eu-north-1"
+}
