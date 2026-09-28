@@ -48,3 +48,7 @@ output "nlb_dns_name" {
   value = aws_lb.main.dns_name
 }
 
+output "k8s_cd_arn" {
+  value = aws_iam_role.k8s_cd.arn
+}
+

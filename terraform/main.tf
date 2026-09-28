@@ -425,19 +425,19 @@ resource "aws_vpc_security_group_ingress_rule" "nlb_http_from_internet" {
   to_port           = 80
 }
 resource "aws_vpc_security_group_ingress_rule" "ingress_between_workers" {
-  security_group_id = aws_security_group.k8s_nodes.id
+  security_group_id            = aws_security_group.k8s_nodes.id
   referenced_security_group_id = aws_security_group.k8s_nodes.id
-  from_port         = 10250
-  ip_protocol       = "tcp"
-  to_port           = 10250
+  from_port                    = 10250
+  ip_protocol                  = "tcp"
+  to_port                      = 10250
 }
 
 resource "aws_vpc_security_group_egress_rule" "egress_between_workers" {
-  security_group_id = aws_security_group.k8s_nodes.id
+  security_group_id            = aws_security_group.k8s_nodes.id
   referenced_security_group_id = aws_security_group.k8s_nodes.id
-  from_port         = 10250
-  ip_protocol       = "tcp"
-  to_port           = 10250
+  from_port                    = 10250
+  ip_protocol                  = "tcp"
+  to_port                      = 10250
 }
 
 resource "aws_vpc_security_group_egress_rule" "nlb_http_to_workers" {
@@ -573,4 +573,57 @@ resource "aws_iam_role_policy_attachment" "kubernetes_worker" {
 resource "aws_iam_instance_profile" "kubernetes_worker" {
   name = "${var.project_name}-kubernetes-worker-profile"
   role = aws_iam_role.kubernetes_worker.name
+}
+
+data "aws_iam_openid_connect_provider" "gitlab" {
+  url = "https://gitlab.com"
+}
+resource "aws_iam_role" "k8s_cd" {
+  name = "k8s-cd"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.gitlab.arn
+        }
+        Condition = {
+          StringEquals = {
+            "gitlab.com:aud" = "sts.amazonaws.com"
+
+            "gitlab.com:sub" = "project_path:anilist-cicd/anilist-k8s:ref_type:branch:ref:main"
+          }
+        }
+      },
+    ]
+  })
+
+  tags = {
+    tag-key = "tag-value"
+  }
+}
+
+resource "aws_iam_role_policy" "k8s_cd" {
+  name = "k8s-cd-ec2-describe"
+  role = aws_iam_role.k8s_cd.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeAddresses",
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
