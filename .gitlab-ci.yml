@@ -1,3 +1,19 @@
+.configure_cluster_base:
+  extends: .aws_oidc
+  stage: configure
+
+  script:
+    - ansible-galaxy collection install -r "$ANSIBLE_ROOT/requirements.yml"
+
+    - terraform -chdir="$TF_ROOT" init
+
+    - bash "$ANSIBLE_ROOT/scripts/generate_inventory.sh"
+
+    - |
+      ansible-playbook \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        "$ANSIBLE_ROOT/playbooks/site.yml"
+
 default:
   image:
     name: registry.gitlab.com/anilist-cicd/anilist-infra/ci-image:1.1
@@ -17,7 +33,6 @@ variables:
 
 workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 stages:
@@ -98,6 +113,7 @@ terraform_plan:
 
 
 terraform_apply:
+  
   extends: .aws_oidc
   stage: apply
 
@@ -113,28 +129,93 @@ terraform_apply:
 
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - terraform/**/*
       when: manual
 
   allow_failure: false
 
-configure_cluster:
-  extends: .aws_oidc
-  stage: configure
+configure_after_apply:
+  extends: .configure_cluster_base
 
   needs:
     - job: terraform_apply
 
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - terraform/**/*
+
+
+configure_ansible_only:
+  extends: .configure_cluster_base
+
+  needs:
+    - job: terraform_plan
+      artifacts: false
+    - job: ansible_validate
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - terraform/**/*
+      when: never
+
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - ansible/**/*
+
+verify_cluster:
+  extends: .aws_oidc
+  stage: verify
+
+  needs:
+    - job: configure_after_apply
+      optional: true
+
+    - job: configure_ansible_only
+      optional: true
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - terraform/**/*
+        - ansible/**/*
 
   script:
-    - ansible-galaxy collection install -r "$ANSIBLE_ROOT/requirements.yml"
-
     - terraform -chdir="$TF_ROOT" init
-
     - bash "$ANSIBLE_ROOT/scripts/generate_inventory.sh"
 
     - |
-      ansible-playbook \
+      ansible control_plane \
         -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
-        "$ANSIBLE_ROOT/playbooks/site.yml"
+        -b \
+        -m shell \
+        -a '/usr/bin/kubectl --kubeconfig /etc/kubernetes/admin.conf get nodes -o wide'
+
+    - |
+      ansible control_plane \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        -b \
+        -m shell \
+        -a '/usr/bin/kubectl --kubeconfig /etc/kubernetes/admin.conf get pods -n kube-system'
+
+    - |
+      ansible control_plane \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        -b \
+        -m shell \
+        -a '/usr/bin/kubectl --kubeconfig /etc/kubernetes/admin.conf get pods -n calico-system'
+
+    - |
+      ansible control_plane \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        -b \
+        -m shell \
+        -a '/usr/local/bin/helm version'
+    - |
+      ansible control_plane \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        -b \
+        -m shell \
+        -a '/usr/bin/kubectl --kubeconfig /etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=120s'
