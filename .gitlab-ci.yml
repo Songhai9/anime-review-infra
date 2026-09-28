@@ -31,6 +31,8 @@ variables:
 
   ANSIBLE_SSM_BUCKET: "songhai9-anime-review-ansible-ssm-0909-eu-north-1"
 
+  REBUILD_CLUSTER: "false"
+
   
 
 workflow:
@@ -131,6 +133,9 @@ terraform_apply:
     - terraform -chdir="$TF_ROOT" apply -auto-approve tfplan
 
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REBUILD_CLUSTER == "true"'
+      when: manual
+
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - terraform/**/*
@@ -145,6 +150,8 @@ configure_after_apply:
     - job: terraform_apply
 
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REBUILD_CLUSTER == "true"'
+
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - terraform/**/*
@@ -159,6 +166,9 @@ configure_ansible_only:
     - job: ansible_validate
 
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REBUILD_CLUSTER == "true"'
+      when: never
+
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - terraform/**/*
@@ -180,6 +190,8 @@ verify_cluster:
       optional: true
 
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REBUILD_CLUSTER == "true"'
+
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - terraform/**/*
@@ -238,6 +250,8 @@ bootstrap_k8s:
     BOOTSTRAP_CLUSTER: "true"
   
   rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REBUILD_CLUSTER == "true"'
+
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - terraform/**/*
