@@ -2,7 +2,29 @@ default:
   image:
     name: registry.gitlab.com/anilist-cicd/anilist-infra/ci-image:1.0
     entrypoint: [""]
-    
+
+variables:
+  TF_ROOT: "terraform"
+  ANSIBLE_ROOT: "ansible"
+
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+  AWS_REGION: "eu-north-1"
+  AWS_DEFAULT_REGION: "eu-north-1"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+stages:
+  - validate
+  - plan
+  - apply
+  - configure
+  - verify
+
 
 .aws_oidc:
   id_tokens:
@@ -10,109 +32,85 @@ default:
       aud: sts.amazonaws.com
 
   before_script:
-    - >
-      aws_sts_output=$(aws sts assume-role-with-web-identity
-      --role-arn "$AWS_ROLE_ARN"
-      --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
-      --web-identity-token "$GITLAB_OIDC_TOKEN"
-      --duration-seconds 3600
-      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
-      --output text)
+    - |
+      aws_sts_output=$(aws sts assume-role-with-web-identity \
+        --role-arn "$AWS_ROLE_ARN" \
+        --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}" \
+        --web-identity-token "$GITLAB_OIDC_TOKEN" \
+        --duration-seconds 3600 \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
 
     - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $aws_sts_output)
-    - aws sts get-caller-identity
 
-workflow:
-  name: Update infra
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
 
-stages:
-  - validate
-  - plan
-  - provision
-  - configure
-  - test
-
-validating_job:
-  extends: .aws_oidc
+terraform_validate:
   stage: validate
-  script:
-    - cd legacy/vm/terraform
-    - terraform init
-    - terraform fmt -check
-    - terraform validate
 
-planning_job:
+  script:
+    - terraform -chdir="$TF_ROOT" fmt -check -recursive
+    - terraform -chdir="$TF_ROOT" init -backend=false
+    - terraform -chdir="$TF_ROOT" validate
+
+
+ansible_validate:
+  stage: validate
+
+  script:
+    - ansible-galaxy collection install -r "$ANSIBLE_ROOT/requirements.yml"
+
+    - |
+      cat > /tmp/inventory.ini <<EOF
+      [control_plane]
+      control-plane ansible_host=127.0.0.1
+
+      [workers]
+      worker-1 ansible_host=127.0.0.1
+      worker-2 ansible_host=127.0.0.1
+
+      [k8s_nodes:children]
+      control_plane
+      workers
+      EOF
+
+    - ansible-playbook
+        -i /tmp/inventory.ini
+        --syntax-check
+        "$ANSIBLE_ROOT/playbooks/site.yml"
+
+
+terraform_plan:
   extends: .aws_oidc
   stage: plan
+
   script:
-    - cd legacy/vm/terraform
-    - terraform init
-    - terraform plan -out=tfplan
+    - terraform -chdir="$TF_ROOT" init
+    - terraform -chdir="$TF_ROOT" plan -out=tfplan
+    - terraform -chdir="$TF_ROOT" show -no-color tfplan > plan.txt
+
   artifacts:
     paths:
-      - legacy/vm/terraform/tfplan
-    expire_in: 1 hour
+      - terraform/tfplan
+      - terraform/plan.txt
+    expire_in: 1 day
 
-provisioning_job:
+
+terraform_apply:
   extends: .aws_oidc
-  stage: provision
+  stage: apply
+
   needs:
-    - job: planning_job
+    - job: terraform_plan
       artifacts: true
+
+  resource_group: anime-review-infra
+
   script:
-    - cd legacy/vm/terraform
-    - terraform init
-    - terraform apply -auto-approve tfplan
-
-configuring_job:
-  extends: .aws_oidc
-  stage: configure
-
-  needs:
-    - provisioning_job
+    - terraform -chdir="$TF_ROOT" init
+    - terraform -chdir="$TF_ROOT" apply -auto-approve tfplan
 
   rules:
-    - if: "$IMAGE_TAG"
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
 
-  script:
-    - terraform -chdir=legacy/vm/terraform init
-    - bash legacy/vm/ansible/scripts/generate_inventory.sh
-
-    - mkdir -p ~/.ssh
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/anime-review
-    - chmod 600 ~/.ssh/anime-review
-
-    - |
-      ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -i ~/.ssh/anime-review \
-        -l ubuntu \
-        "$(terraform -chdir=legacy/vm/terraform output -raw bastion_eip)" \
-        "echo BASTION_OK"
-
-    - ansible-galaxy collection install -r legacy/vm/ansible/requirements.yml
-
-    - cat legacy/vm/ansible/inventory/inventory.ini
-
-    - |
-      ansible private \
-        -i legacy/vm/ansible/inventory/inventory.ini \
-        -m wait_for_connection \
-        -a "timeout=300" \
-        --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
-
-    - |
-      ansible private \
-        -i legacy/vm/ansible/inventory/inventory.ini \
-        -m ping \
-        --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE"
-
-    - |
-      ansible-playbook \
-        -i legacy/vm/ansible/inventory/inventory.ini \
-        --vault-password-file "$ANSIBLE_VAULT_PASSWORD_FILE" \
-        -e "image_tag=$IMAGE_TAG" \
-        legacy/vm/ansible/playbooks/site.yml
+  allow_failure: false
