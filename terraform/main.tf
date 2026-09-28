@@ -338,7 +338,7 @@ resource "aws_instance" "kubernetes" {
   instance_type        = var.kubernetes_instance_type
   subnet_id            = aws_subnet.kubernetes.id
   key_name             = aws_key_pair.main.key_name
-  iam_instance_profile = each.key == "control_plane" ? null : aws_iam_instance_profile.kubernetes_worker.name
+  iam_instance_profile = each.key == "control_plane" ? aws_iam_instance_profile.kubernetes_control_plane.name : aws_iam_instance_profile.kubernetes_worker.name
 
   vpc_security_group_ids = each.key == "control_plane" ? [
     aws_security_group.control_plane.id,
@@ -581,8 +581,6 @@ data "aws_iam_openid_connect_provider" "gitlab" {
 resource "aws_iam_role" "k8s_cd" {
   name = "k8s-cd"
 
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression result to valid JSON syntax.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -608,7 +606,6 @@ resource "aws_iam_role" "k8s_cd" {
     tag-key = "tag-value"
   }
 }
-
 resource "aws_iam_role_policy" "k8s_cd" {
   name = "k8s-cd-ec2-describe"
   role = aws_iam_role.k8s_cd.id
@@ -623,6 +620,75 @@ resource "aws_iam_role_policy" "k8s_cd" {
           "ec2:DescribeAddresses",
         ]
         Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "kubernetes_control_plane" {
+  name = "${var.project_name}-kubernetes-control-plane"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
+
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-kubernetes-control-plane"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "kubernetes_control_plane_ssm" {
+  role       = aws_iam_role.kubernetes_control_plane.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "kubernetes_control_plane" {
+  name = "${var.project_name}-kubernetes-control-plane-profile"
+  role = aws_iam_role.kubernetes_control_plane.name
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_iam_role_policy" "k8s_cd_ssm" {
+  name = "k8s-cd-ssm"
+  role = aws_iam_role.k8s_cd.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:DescribeInstanceInformation",
+          "ssm:GetCommandInvocation",
+          "ssm:ListCommandInvocations"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand"
+        ]
+
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"
+        ]
       }
     ]
   })
