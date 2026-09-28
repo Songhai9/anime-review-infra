@@ -72,6 +72,51 @@ resource "aws_iam_role_policy" "gitlab_terraform" {
 
     Statement = [
       {
+        Sid    = "AnsibleSSMStartSession"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:StartSession"
+        ]
+
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:instance/*",
+          "arn:aws:ssm:${var.aws_region}:*:document/SSM-SessionManagerRunShell"
+        ]
+      },
+      {
+        Sid    = "AnsibleSSMSessionControl"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:TerminateSession",
+          "ssm:ResumeSession"
+        ]
+
+        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:session/*"
+      },
+      {
+        Sid    = "AnsibleSSMRead"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:DescribeInstanceInformation",
+          "ssm:GetConnectionStatus"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Sid    = "AnsibleSSMDataChannel"
+        Effect = "Allow"
+
+        Action = [
+          "ssmmessages:OpenDataChannel"
+        ]
+
+        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:session/*"
+      },
+      {
         Sid      = "TerraformEC2Infrastructure"
         Effect   = "Allow"
         Action   = ["ec2:*"]
