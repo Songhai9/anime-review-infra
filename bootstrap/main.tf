@@ -163,6 +163,29 @@ resource "aws_iam_role_policy" "gitlab_terraform" {
         ]
       },
       {
+        Sid    = "AnsibleSSMBucketAccess"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
+
+        Resource = aws_s3_bucket.ansible_ssm.arn
+      },
+      {
+        Sid    = "AnsibleSSMObjectAccess"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+
+        Resource = "${aws_s3_bucket.ansible_ssm.arn}/*"
+      },
+      {
         Sid    = "TerraformIAMInstanceProfiles"
         Effect = "Allow"
         Action = [
