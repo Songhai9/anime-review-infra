@@ -176,11 +176,46 @@
         name: kubelet
         enabled: true
 
-    - name: Install AWS CLI
-      ansible.builtin.apt:
-        name: awscli
-        state: present
-        update_cache: true
+    - name: Check whether AWS CLI is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/aws
+      register: aws_cli_binary
+
+    - name: Install AWS CLI v2
+      when: not aws_cli_binary.stat.exists
+      block:
+        - name: Install AWS CLI prerequisites
+          ansible.builtin.apt:
+            name:
+              - unzip
+              - curl
+            state: present
+            update_cache: true
+
+        - name: Download AWS CLI v2
+          ansible.builtin.get_url:
+            url: https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip
+            dest: /tmp/awscliv2.zip
+            mode: "0644"
+
+        - name: Extract AWS CLI v2
+          ansible.builtin.unarchive:
+            src: /tmp/awscliv2.zip
+            dest: /tmp
+            remote_src: true
+
+        - name: Install AWS CLI v2
+          ansible.builtin.command:
+            cmd: /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+          changed_when: true
+
+        - name: Remove AWS CLI temporary files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/awscliv2.zip
+            - /tmp/aws
 
   handlers:
     - name: Apply sysctl settings
