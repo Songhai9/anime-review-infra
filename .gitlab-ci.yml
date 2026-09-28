@@ -116,3 +116,35 @@ terraform_apply:
       when: manual
 
   allow_failure: false
+
+configure_ssm_test:
+  extends: .aws_oidc
+  stage: configure
+
+  needs:
+    - job: terraform_apply
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+  script:
+    - session-manager-plugin --version
+    - python -c 'import boto3, botocore; print("boto3:", boto3.__version__, "botocore:", botocore.__version__)'
+
+    - ansible-galaxy collection install -r "$ANSIBLE_ROOT/requirements.yml"
+
+    - terraform -chdir="$TF_ROOT" init
+
+    - bash "$ANSIBLE_ROOT/scripts/generate_inventory.sh"
+
+    - cat "$ANSIBLE_ROOT/inventory/inventory.ini"
+
+    - |
+      aws ssm describe-instance-information \
+        --query 'InstanceInformationList[].{Id:InstanceId,PingStatus:PingStatus}' \
+        --output table
+
+    - |
+      ansible all \
+        -i "$ANSIBLE_ROOT/inventory/inventory.ini" \
+        -m ping
