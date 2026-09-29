@@ -1,0 +1,5 @@
+# Destination: legacy/vm/ansible/inventory/group_vars/all/vault.yml
+# Populate and encrypt; replace/re-encrypt other applicable old vault.yml files.
+vault_db_password: "REPLACE_WITH_DATABASE_PASSWORD"
+vault_registry_username: "REPLACE_WITH_DEPLOY_TOKEN_USERNAME"
+vault_registry_password: "REPLACE_WITH_READ_REGISTRY_TOKEN"

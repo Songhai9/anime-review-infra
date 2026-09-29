@@ -1,0 +1,6 @@
+aws_region                = "eu-north-1"
+aws_account_id            = "123456789012" # REPLACE
+state_bucket_name         = "replace-me-anime-review-tfstate-eu-north-1"
+ansible_ssm_bucket_name   = "replace-me-anime-review-ansible-ssm-eu-north-1"
+gitlab_infra_project_path = "YOUR_GROUP/YOUR_INFRA"
+# Also update bootstrap/providers.tf and the other backend blocks.

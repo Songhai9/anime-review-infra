@@ -1,0 +1,11 @@
+aws_region               = "eu-north-1"
+availability_zone        = "eu-north-1a"
+project_name             = "anime-review"
+environment              = "dev"
+vpc_cidr                 = "10.0.0.0/16"
+public_subnet_cidr       = "10.0.1.0/24"
+kubernetes_subnet_cidr   = "10.0.10.0/24"
+admin_cidr               = "203.0.113.10/32" # REPLACE: authorized workstation public IP
+ssh_public_key           = "ssh-ed25519 REPLACE_WITH_PUBLIC_KEY manga-devops"
+bastion_instance_type    = "t4g.micro"
+kubernetes_instance_type = "t4g.small"
