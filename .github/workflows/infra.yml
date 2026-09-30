@@ -173,6 +173,15 @@ jobs:
             > "$TF_ROOT/plan.txt"
 
           cat "$TF_ROOT/plan.txt"
+      
+      - name: Upload Terraform plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: terraform-plan
+          path: |
+            terraform/tfplan
+            terraform/plan.txt
+          retention-days: 1
 
 
   apply:
