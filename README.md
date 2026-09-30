@@ -2,7 +2,7 @@
 
 Terraform provisions AWS resources. Ansible prepares and configures the machines. This repository preserves the historical VM deployments and now manages a kubeadm Kubernetes cluster administered through AWS Systems Manager.
 
-![Kubernetes architecture](docs/assets/03-kubernetes.png)
+![Kubernetes architecture](docs/assets/AWS NLB.png)
 
 ## Deployment documentation
 

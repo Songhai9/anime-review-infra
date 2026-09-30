@@ -58,6 +58,31 @@ resource "aws_iam_role" "gitlab_terraform" {
             "gitlab.com:sub" = "project_path:${var.gitlab_infra_project_path}:ref_type:branch:ref:main"
           }
         }
+      },
+      {
+        Sid    = "GitHubActions"
+        Effect = "Allow"
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:Songhai9/anime-review-infra:ref:refs/heads/main",
+              "repo:Songhai9@*/anime-review-infra@*:ref:refs/heads/main",
+
+              "repo:Songhai9/anime-review-infra:environment:infrastructure",
+              "repo:Songhai9@*/anime-review-infra@*:environment:infrastructure"
+            ]
+          }
+        }
       }
     ]
   })
@@ -254,4 +279,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "ansible_ssm" {
       sse_algorithm = "AES256"
     }
   }
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
 }
