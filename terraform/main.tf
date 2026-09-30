@@ -585,6 +585,28 @@ resource "aws_iam_role" "k8s_cd" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "GitHubActions"
+        Effect = "Allow"
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.github.arn
+        }
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:Songhai9/anime-review-k8s:ref:refs/heads/main",
+              "repo:Songhai9@*/anime-review-k8s@*:ref:refs/heads/main"
+            ]
+          }
+        }
+      },
+      {
         Action = "sts:AssumeRoleWithWebIdentity"
         Effect = "Allow"
         Sid    = ""
@@ -759,4 +781,8 @@ resource "aws_iam_role_policy" "kubernetes_control_plane_bootstrap" {
       }
     ]
   })
+}
+
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
