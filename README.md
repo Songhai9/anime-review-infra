@@ -34,15 +34,6 @@ Application code lives in [anime-review-app](https://github.com/Songhai9/anime-r
 
 The two legacy directories document variants of the VM phase. `legacy/local` means Ansible driven from the workstation, not local VMs. Local Docker Compose belongs to the application repository. All commands in these guides run from the repository root unless stated otherwise.
 
-## Current limitations
-
-This is a demonstration cluster with one control plane in one AZ. These sources do not implement automated PostgreSQL backups, database high availability, application authentication, configured application TLS, HPA or a Prometheus/Grafana monitoring stack. S3 state is not an application-data backup.
-
-The CI image and several tool downloads are not all pinned by digest/version. Terraform permissions are broad. The CI does not yet contain the `REBUILD_CLUSTER` workflow discussed during the project and does not trigger downstream application bootstrapping.
-
-Reference checked on September 29, 2026: `e5a4214925891bf2143dcd7c4199917a06c9df56`. Supplied examples are documentation additions; no AWS deployment was executed to validate them.
-
-[Detailed sources and documented revision](docs/SOURCES.md).
 
 ## Cluster deployment
 
@@ -165,7 +156,11 @@ Manual apply uses the **saved plan**, not a freshly calculated plan. If the arti
 
 Current CI does not explicitly wait for SSM Online before configuration. Manual step 3 handles that prerequisite. A `REBUILD_CLUSTER` action and automatic application-bootstrap trigger were discussed but are not implemented in this commit.
 
-### 8. Troubleshooting
+### 8 - Deploy with Pipelines
+
+Alternatively, you can automatically provision the infrastructure and deploy the app with a Kubernetes cluster. For that you need to manually trigger a pipeline with `REBUILD_CLUSTER=true`. This will start a pipeline that provisions AWS resources and, when finished, triggers [anime-review-k8s](https://github.com/Songhai9/anime-review-k8s) to deploy the cluster and make the application accessible.
+
+### 9. Troubleshooting
 
 | Symptom | Verifiable cause to investigate |
 |---|---|
