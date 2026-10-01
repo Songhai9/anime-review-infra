@@ -1,3 +1,4 @@
+# Destination: terraform/terraform.tfvars (git-ignored). Only admin_cidr and ssh_public_key are mandatory.
 aws_region               = "eu-north-1"
 availability_zone        = "eu-north-1a"
 project_name             = "anime-review"
@@ -9,3 +10,4 @@ admin_cidr               = "203.0.113.10/32" # REPLACE: authorized workstation p
 ssh_public_key           = "ssh-ed25519 REPLACE_WITH_PUBLIC_KEY manga-devops"
 bastion_instance_type    = "t4g.micro"
 kubernetes_instance_type = "t4g.small"
+k8s_transfer_bucket_name = "replace-me-anime-review-ansible-ssm-eu-north-1" # same as bootstrap ansible_ssm_bucket_name

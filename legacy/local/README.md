@@ -1,115 +1,140 @@
-# AWS VMs · native Node.js and systemd
+# Phase 2a · Native Node.js on AWS virtual machines
 
-[Current Kubernetes deployment](../../README.md) · [AWS bootstrap](../../docs/BOOTSTRAP-AWS.md) · [Variables](../../docs/CONFIGURATION.md) · [Recovered CI](../../docs/ci-history/README.md)
+[← Phase 3 (current)](../../README.md) · [Phase 2b · Docker on VMs](../vm/README.md) · [AWS foundations](../../docs/BOOTSTRAP-AWS.md) · [Variables](../../docs/CONFIGURATION.md)
 
-![VM architecture](../../docs/assets/02-vm.png)
+First cloud deployment of Anime Review. Terraform creates a three-tier network and four ARM64 VMs; **Ansible, run from the operator workstation**, installs PostgreSQL, clones the application from Git and runs the frontend and API as **systemd services**. There was no pipeline at this milestone. “local” in the folder name refers to Ansible running locally, not to the machines.
 
-This is the native variant of the VM phase, executed through Ansible from your workstation. For the container variant, see [legacy/vm](../vm/README.md). Run commands from the infrastructure repository root.
+![Phase 2a · native Node.js on AWS VMs](../../docs/assets/02-vm-native.png)
 
-## 1. Scope and requirements
+<details>
+<summary><b>Detailed view</b> (every component, port and job)</summary>
 
-Four Ubuntu ARM64 EC2 instances: bastion, frontend, backend and PostgreSQL. The frontend has a public IP; the API and database remain private. Access control combines AWS routing, Security Groups and PostgreSQL's `pg_hba.conf`.
+![Phase 2a · native Node.js on AWS VMs · detailed](../../docs/assets/02-vm-native-detailed.png)
 
-Prepare S3/OIDC foundations, Terraform 1.13, AWS CLI, Ansible, `jq`, SSH and private key `~/.ssh/anime-review`. The workstation must reach bastion port 22 and be covered by `admin_cidr`. For the Docker variant, publish two ARM64 images and obtain a `read_registry` deploy token.
+</details>
 
-This guide uses today's `legacy/vm/terraform` layout for both variants. They are **alternatives on the same VMs**: do not run systemd and Docker simultaneously on ports 3000/3001. To reproduce the exact original layout, use a separate checkout of the historical commit referenced in the CI archives.
+## Implemented DevOps features
 
-## 2. Provision networking and machines
+| Area | What was implemented |
+|---|---|
+| Network (Terraform) | VPC `10.0.0.0/16`; public subnet `10.0.1.0/24` (bastion, frontend, NAT); private API subnet `10.0.2.0/24`; private DB subnet `10.0.3.0/24`; IGW, NAT Gateway, one route table per tier |
+| Compute | 4 × Ubuntu ARM64 `t4g.micro`: bastion (Elastic IP), frontend (public IP), backend, database |
+| Security groups | Internet → frontend :3000 · frontend → backend :3001 · backend → database :5432 · admin CIDR → bastion :22 · bastion → every VM :22. Groups reference each other, never `0.0.0.0/0` inbound |
+| Remote state | S3 backend, key `anime-review/terraform.tfstate`, lockfile |
+| Inventory | `generate_inventory.sh` reads Terraform outputs, uses private IPs and an SSH `ProxyCommand` through the bastion |
+| Database (Ansible) | PostgreSQL 16 from apt, `anilist_db` / `anilist_user`, listens on the private IP, `pg_hba.conf` allows only the backend `/32` |
+| Application (Ansible) | NodeSource 26.x, dedicated system users, `git clone main`, `npm ci --omit=dev`, `EnvironmentFile` in `/etc/anime-review`, systemd units `anime-review-api` and `anime-review-frontend` |
+| Secrets | DB password in **Ansible Vault** (`group_vars/{backend,database}/vault.yml`) |
+| Checks | `/health` and `/ready` endpoints, `tests/*.sh` smoke commands |
 
-From the infra repository root:
+```mermaid
+sequenceDiagram
+    participant O as Operator workstation
+    participant S3 as S3 state
+    participant AWS as AWS APIs
+    participant B as Bastion
+    participant VM as frontend / backend / database VMs
+    O->>S3: terraform init (backend + lock)
+    O->>AWS: terraform apply (VPC, SGs, 4 EC2)
+    O->>O: generate_inventory.sh (Terraform outputs)
+    O->>B: SSH :22 (admin_cidr)
+    B->>VM: ProxyCommand hop
+    O->>VM: ansible-playbook site.yml: database → backend → frontend
+    VM->>VM: git clone main · npm ci · systemd start
+```
+
+## Prerequisites
+
+- [AWS foundations](../../docs/BOOTSTRAP-AWS.md) done: state bucket exists, admin AWS profile works.
+- Workstation: Terraform ≥ 1.10, AWS CLI v2, Ansible, `jq`, SSH ([WORKSTATION](../../docs/WORKSTATION.md)).
+- SSH key `~/.ssh/anime-review` (+ `.pub`). Your public IP for `admin_cidr`.
+- A database password of your choice.
+- The application repository must be clonable by the VMs (public, or a read-only deploy token: never commit it in the playbook URL).
+
+### Files to prepare
+
+| Example | Copy to | Then |
+|---|---|---|
+| `docs/examples/vm.terraform.tfvars.example` | `legacy/vm/terraform/terraform.tfvars` | fill `admin_cidr`, `ssh_public_key` |
+| `docs/examples/vault-native.yml.example` | `legacy/local/inventory/group_vars/backend/vault.yml` **and** `…/database/vault.yml` | same password in both, then `ansible-vault encrypt` |
+
+The Vault files committed in the repository are encrypted with the original password. Replace them with your own if you do not have it.
+
+## Deploy
+
+All commands run from the **infra repository root**. Terraform lives in `legacy/vm/terraform` and is shared by phases 2a and 2b: they are two ways to deploy the application on the **same four VMs** (never run both at once, they use the same ports).
+
+### 1 · Provision
 
 ```bash
-cp docs/examples/vm.terraform.tfvars.example legacy/vm/terraform/terraform.tfvars
-# Set admin_cidr and ssh_public_key; configure the actual S3 backend.
+cp docs/examples/vm.terraform.tfvars.example legacy/vm/terraform/terraform.tfvars   # edit it
 terraform -chdir=legacy/vm/terraform init
-terraform -chdir=legacy/vm/terraform fmt -check
-terraform -chdir=legacy/vm/terraform validate
 terraform -chdir=legacy/vm/terraform plan -out=vm.tfplan
-terraform -chdir=legacy/vm/terraform show vm.tfplan
 terraform -chdir=legacy/vm/terraform apply vm.tfplan
 terraform -chdir=legacy/vm/terraform output
 ```
 
-The plan should match the expected VMs, VPC, subnets, routes, NAT/IGW, Security Groups, public key and Elastic IP. State key `anime-review/terraform.tfstate` is separate from the cluster's state. NAT, VMs, volumes and IP addresses may incur charges while provisioned.
+### 2 · Inventory
 
-| Source | Destination | Port | Purpose |
-|---|---|---|---|
-| Internet | Public frontend | TCP 3000 | HTTP web interface |
-| Frontend | Private backend | TCP 3001 | Internal API |
-| Backend | Private PostgreSQL | TCP 5432 | SQL queries |
-| Admin CIDR | Bastion | TCP 22 | SSH entry point |
-| Bastion | Application VMs | TCP 22 | Ansible SSH hop |
-| VMs | Internet through appropriate routes | TCP 80/443 | Packages, Git, registry, AniList |
-
-Security Groups allow source groups corresponding to the tiers, rather than opening ports to everyone. The private backend IP also restricts PostgreSQL through a `/32` rule.
-
-## 3. Generate and inspect inventory
+`legacy/local/scripts/generate_inventory.sh` still points to the pre-archive Terraform path. Generate the inventory with the phase 2b script and reuse it:
 
 ```bash
 chmod 600 ~/.ssh/anime-review
 bash legacy/vm/ansible/scripts/generate_inventory.sh
-ansible-inventory -i legacy/vm/ansible/inventory/inventory.ini --graph
-BASTION_IP=$(terraform -chdir=legacy/vm/terraform output -raw bastion_eip)
-ssh -i ~/.ssh/anime-review "ubuntu@$BASTION_IP" 'hostname'
-```
-
-The generator uses private IPs for frontend/backend/database and an SSH `ProxyCommand` through the bastion. The `private` group contains all three tiers, including the frontend that also has a public IP. Inventory must match the **VM state** outputs, never the cluster state.
-
-The archive disables host-key verification (`StrictHostKeyChecking=no`). This historical compromise should be corrected for a lasting environment: record verified host fingerprints in `known_hosts`, then enable strict checking.
-
-## 4. Native variant · Node.js and systemd
-
-After archiving, `legacy/local/scripts/` points to a Terraform directory that no longer exists. Use the freshly generated inventory from step 3 and copy it to the local inventory:
-
-```bash
 cp legacy/vm/ansible/inventory/inventory.ini legacy/local/inventory/inventory.ini
-ansible-galaxy collection install community.postgresql
+ansible-inventory -i legacy/local/inventory/inventory.ini --graph
 ```
 
-Replace the backend and database groups' two `vault.yml` files using `vault-native.yml.example`, with the **same** `vault_db_password`, then encrypt them:
+### 3 · Secrets
 
 ```bash
+cp docs/examples/vault-native.yml.example legacy/local/inventory/group_vars/backend/vault.yml
+cp docs/examples/vault-native.yml.example legacy/local/inventory/group_vars/database/vault.yml
+# put the same password in both files
 ansible-vault encrypt legacy/local/inventory/group_vars/backend/vault.yml
 ansible-vault encrypt legacy/local/inventory/group_vars/database/vault.yml
-ansible private -i legacy/local/inventory/inventory.ini \
-  --ask-vault-pass -m wait_for_connection -a 'timeout=300'
-ansible-playbook -i legacy/local/inventory/inventory.ini \
-  --ask-vault-pass legacy/local/playbooks/site.yml
 ```
 
-Before running, check the GitLab URL hardcoded in `backend.yml` and `frontend.yml`. The VMs must be able to clone it. For a private project, provide appropriate code access without committing a plaintext token in the URL. The historical code clones `main`, not a pinned commit, so later redeployment can retrieve different code.
-
-Order is database → backend → frontend. The database playbook installs PostgreSQL, creates `anilist_user`/`anilist_db` and configures listening and network access. The other playbooks install NodeSource 26.x, Git and ACL, create dedicated users, clone the code, run `npm ci`, and write environment files under `/etc/anime-review` and systemd units.
-
-Native playbooks use Node 26.x, while images use Node 24. Native PostgreSQL paths are fixed to `/etc/postgresql/16/main`: confirm PostgreSQL 16 or adapt them to `SHOW config_file` / `SHOW hba_file`. The `deb822_repository` module also needs `python3-debian` on the target; if missing, install it before the playbook:
+### 4 · Configure
 
 ```bash
-ansible 'backend:frontend' -i legacy/local/inventory/inventory.ini \
-  --ask-vault-pass -b -m apt -a 'name=python3-debian state=present update_cache=true'
+ansible-galaxy collection install community.postgresql
+ansible private -i legacy/local/inventory/inventory.ini --ask-vault-pass \
+  -m wait_for_connection -a 'timeout=300'
+# deb822_repository needs python3-debian on the targets
+ansible 'backend:frontend' -i legacy/local/inventory/inventory.ini --ask-vault-pass \
+  -b -m apt -a 'name=python3-debian state=present update_cache=true'
+ansible-playbook -i legacy/local/inventory/inventory.ini --ask-vault-pass \
+  legacy/local/playbooks/site.yml
 ```
 
-The backend has no handler guaranteeing restart after code or environment changes. During updates, explicitly restart the relevant services:
+Order: `database.yml` → `backend.yml` → `frontend.yml`. Before running, set the Git URL in `backend.yml` / `frontend.yml` to your application repository.
 
-```bash
-ansible backend -i legacy/local/inventory/inventory.ini --ask-vault-pass \
-  -b -m systemd_service -a 'name=anime-review-api state=restarted daemon_reload=true'
-ansible frontend -i legacy/local/inventory/inventory.ini --ask-vault-pass \
-  -b -m systemd_service -a 'name=anime-review-frontend state=restarted daemon_reload=true'
-```
-
-## 5. Verify the native deployment
+### 5 · Verify
 
 ```bash
 FRONTEND_IP=$(terraform -chdir=legacy/vm/terraform output -raw frontend_public_ip)
 curl --fail "http://$FRONTEND_IP:3000/health"
 ansible backend -i legacy/local/inventory/inventory.ini --ask-vault-pass \
-  -m uri -a 'url=http://localhost:3001/ready status_code=200'
+  -m uri -a 'url=http://localhost:3001/ready'
 ```
 
-Inspect `systemctl status anime-review-api` / `anime-review-frontend` and `journalctl -u SERVICE_NAME` on the corresponding hosts. Perform a real browser write and verify persistence. Diagnose database failures in order: route, Security Group, listening port, `pg_hba.conf`, credentials, schema.
+Then open `http://FRONTEND_IP:3000`, create a reader and a review, reload: the data must persist. Logs: `journalctl -u anime-review-api` / `-u anime-review-frontend`.
 
-## CI and cleanup
+To redeploy new code, rerun the playbook and restart the services explicitly (the backend has no restart handler):
 
-No infrastructure pipeline was found at the documented native milestone. Use the manual procedure above; the recovered VM pipelines target the Docker variant. See [CI provenance](../../docs/ci-history/README.md).
+```bash
+ansible backend -i legacy/local/inventory/inventory.ini --ask-vault-pass -b \
+  -m systemd_service -a 'name=anime-review-api state=restarted daemon_reload=true'
+```
 
-Before releasing resources, back up PostgreSQL and inspect a destroy plan against the VM state only. Preserve shared S3/OIDC foundations if later deployments need them. To switch these VMs to containers, follow [the Docker guide](../vm/README.md) and stop the native application services before reusing their ports.
+## Limits of this phase (why phase 2b exists)
+
+- Code is built on every server (`npm ci` on the VM): no immutable artifact, and `git clone main` is not pinned to a commit.
+- Node.js 26 on the VMs vs Node.js 24 in the images later: environments drift.
+- Everything is manual, from the workstation; SSH host key checking is disabled in the inventory.
+- PostgreSQL config paths are fixed to `/etc/postgresql/16/main`.
+
+## Cleanup
+
+Back up the database (`pg_dump` on the DB VM), then `terraform -chdir=legacy/vm/terraform destroy`. Keep the `bootstrap/` foundations for the next phases.

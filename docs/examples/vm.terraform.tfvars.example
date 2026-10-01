@@ -1,3 +1,0 @@
-aws_region     = "eu-north-1"
-admin_cidr     = "203.0.113.10/32" # REPLACE: workstation or stable runner egress
-ssh_public_key = "ssh-ed25519 REPLACE_WITH_PUBLIC_KEY manga-devops"

@@ -2,44 +2,91 @@
 
 [Home](../README.md) · [AWS foundations](BOOTSTRAP-AWS.md)
 
-![Local view](assets/01-local.png)
+Local application development does not need this repository: see `legacy/local/README.md` in `anime-review-app`. This page is for operating the AWS phases from a workstation (written for macOS; the Linux commands are the same apart from the package manager).
 
-Local application development does not require this infrastructure repository: follow `legacy/local/README.md` in `anime-review-app`. Docker Compose supplies the database and optionally both Node processes. Local execution requires no S3 bucket, GitLab token or AWS credentials.
-
-For the cloud phases, install Git, Terraform 1.13 (the CI image version), AWS CLI v2, Python 3, Ansible, `jq`, an SSH client and the AWS Session Manager plugin. Install Docker if you plan to build the CI image. Terraform must be at least version 1.10 to support `use_lockfile`, even though the repository declares a looser version constraint.
+## 1 · Tools
 
 ```bash
-git --version
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform python@3.12 awscli jq
+brew install --cask session-manager-plugin
+```
+
+Terraform comes from the HashiCorp tap: the `terraform` formula in Homebrew core stopped at 1.5.x, and this project needs at least **1.10** (`use_lockfile`). The CI uses 1.13.
+
+```bash
 terraform version
 aws --version
-ansible --version
 jq --version
 session-manager-plugin --version
 ```
 
-An isolated Python environment installs Ansible tooling without changing the system Python:
+An SSH client is only needed for the bastion and for the legacy VM phases. Docker is only needed to build the GitLab runner image.
+
+## 2 · Python virtual environment for Ansible
+
+Create the venv explicitly from the Homebrew Python. A pyenv shim or the system Python can produce an environment where Ansible, boto3 and the SSM plugin do not see the same interpreter.
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install ansible boto3 botocore
+"$(brew --prefix python@3.12)/bin/python3.12" -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install ansible boto3 'botocore[crt]'
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-The repository does not fully pin these dependencies. Record the actual versions for reproducibility. AWS CLI and Session Manager installation is separate from the Python libraries.
+| Package | Why |
+|---|---|
+| `ansible` | playbooks |
+| `boto3` / `botocore` | used by the `amazon.aws.aws_ssm` connection plugin (S3 transfer, SSM sessions) |
+| `[crt]` extra | needed when the AWS profile comes from `aws login` (console credentials) or SSO: without it, boto3 cannot read those credentials |
+| `amazon.aws`, `community.general` | collections from `ansible/requirements.yml` |
 
-Use an authorized AWS profile or an SSO profile. Explicitly select the profile and region before any operation:
+`.venv/` is git-ignored. These dependencies are not pinned in the repository, so write down the versions you used (`pip freeze`, `ansible --version`).
+
+On macOS, Ansible's forked workers can crash when the Objective-C runtime is initialized after `fork()`. Export this in the session (it is in `operator.env`):
 
 ```bash
-export AWS_PROFILE=YOUR_PROFILE
-export AWS_REGION=eu-north-1
-export AWS_DEFAULT_REGION=eu-north-1
-aws sts get-caller-identity
-aws configure get region --profile "$AWS_PROFILE"
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 ```
 
-For SSO, first run `aws sso login --profile "$AWS_PROFILE"`. Check the returned account ID, especially when the workstation has several profiles. A profile configured for `eu-west-3` does not override `eu-north-1` values hardcoded in project files.
+## 3 · AWS authentication
 
-Create or select a demonstration SSH key for the bastion. The VM inventory generator expects `~/.ssh/anime-review`. Supply only its **public** key to Terraform; the private key stays on the workstation or in a GitLab File variable.
+Use a profile with administrative rights on the account. With the AWS CLI's console login:
 
-Before phase 2 or 3, populate the examples described in [CONFIGURATION](CONFIGURATION.md). Do not export a local profile in CI jobs: those jobs receive credentials through OIDC.
+```bash
+aws login --profile YOUR_PROFILE
+```
+
+With IAM Identity Center, use `aws sso login --profile YOUR_PROFILE` instead.
+
+Copy [`examples/operator.env.example`](examples/operator.env.example) to `~/.config/anime-review/operator.env` (outside Git), fill it, then load it in every new shell:
+
+```bash
+. ~/.config/anime-review/operator.env
+aws sts get-caller-identity          # the Account must be the project account
+```
+
+Two buckets, two roles. Do not mix them up:
+
+| Bucket | Role | Used by |
+|---|---|---|
+| state bucket (`state_bucket_name`) | Terraform state of `bootstrap/` and `terraform/` | backend blocks only |
+| transfer bucket (`ansible_ssm_bucket_name`) | Ansible SSM file transfer, `k8s-bootstrap/` archives | `ANSIBLE_SSM_BUCKET`, `K8S_TRANSFER_BUCKET` |
+
+Export the profile and region explicitly. A profile whose default region is another one does not override the `eu-north-1` values hard-coded in the project. CI jobs never use a local profile: they receive credentials through OIDC.
+
+## 4 · SSH key for the bastion
+
+`terraform/` still provisions a bastion, so it requires `ssh_public_key` and `admin_cidr`:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/anime-review
+cat ~/.ssh/anime-review.pub          # value for ssh_public_key
+curl -s https://checkip.amazonaws.com # your IP, used as admin_cidr = "x.x.x.x/32"
+```
+
+The private key stays on the workstation. Ansible and the CI do not use it for the Kubernetes nodes: they go through SSM.
+
+Next: [AWS foundations](BOOTSTRAP-AWS.md), then [Deploy the cluster](../README.md#deploy-the-cluster).

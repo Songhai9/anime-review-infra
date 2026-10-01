@@ -24,9 +24,11 @@ State uses three different S3 keys:
 
 Never reuse the same key for VM and cluster resources. Update bucket names in the **Git-tracked backend blocks** so CI can use them too. A local `-backend-config` argument does not change runner configuration.
 
-## 2. Create or verify the GitLab OIDC provider
+## 2. OIDC identity providers (GitLab and GitHub)
 
-The repository uses a `data "aws_iam_openid_connect_provider"` lookup: it expects an existing provider. In AWS IAM → Identity providers, verify/create an OpenID Connect provider with URL `https://gitlab.com` and audience `sts.amazonaws.com`.
+**GitHub:** `bootstrap/main.tf` creates the `token.actions.githubusercontent.com` provider itself and adds a `GitHubActions` trust statement to the CI role (branch `main` of anime-review-infra, and its `infrastructure` environment). `terraform/main.tf` looks it up for the `k8s-cd` role.
+
+**GitLab:** the repository uses a `data "aws_iam_openid_connect_provider"` lookup: it expects an existing provider. In AWS IAM → Identity providers, verify/create an OpenID Connect provider with URL `https://gitlab.com` and audience `sts.amazonaws.com`.
 
 Once `AWS_ACCOUNT_ID` is set, verify through the CLI:
 
@@ -79,7 +81,7 @@ The Terraform backend must read/write its state object and manage the `.tflock` 
 
 ## 5. Prepare infra CI
 
-Set the infra project's GitLab `AWS_ROLE_ARN` variable to the `terraform_ci_role_arn` output. Set `ANSIBLE_SSM_BUCKET` to the transfer bucket and supply mandatory Terraform variables `TF_VAR_admin_cidr` and `TF_VAR_ssh_public_key`. For a renamed account/project setup, also update CI registry paths and trust policies.
+Set the infra project's GitLab `AWS_ROLE_ARN` variable to the `terraform_ci_role_arn` output. Set `ANSIBLE_SSM_BUCKET` in `.gitlab-ci.yml` (and `k8s_transfer_bucket_name` in `terraform/variables.tf`) to the transfer bucket and supply mandatory Terraform variables `TF_VAR_admin_cidr` and `TF_VAR_ssh_public_key`. For a renamed account/project setup, also update CI registry paths and trust policies.
 
 Build and publish the tools image **before** running CI that references it:
 
@@ -95,7 +97,12 @@ The Dockerfile downloads x86_64 AWS CLI and Session Manager binaries, so the run
 
 Neither bootstrap nor cluster Terraform creates `/anime-review/postgres/password`. Create it in Systems Manager → Parameter Store as a **SecureString** in `eu-north-1`, using your chosen password. Do not print it in logs or place its literal value in a versioned script.
 
-The identity executing `bootstrap-cluster.sh` must be able to read and decrypt this parameter, with the necessary KMS permissions when using a customer-managed key. The CI role `k8s-cd` is not automatically passed to the control plane. However, its EC2 profile already has `ssm:GetParameter` through `AmazonSSMManagedInstanceCore`; verify effective permissions, KMS and any account restrictions. The K8s guide provides a concrete execution path. [Official AWS policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSSMManagedInstanceCore.html).
+`bootstrap-cluster.sh` runs on the control plane and reads the parameter with the **control-plane instance profile**. Terraform grants it `ssm:GetParameter` on exactly `parameter/anime-review/postgres/password` (policy `anime-review-control-plane-bootstrap`), plus `s3:GetObject` on `k8s-bootstrap/*` in the transfer bucket. The default `aws/ssm` KMS key needs nothing more; a customer-managed key also needs `kms:Decrypt` for that role. The GitLab `k8s-cd` role is never forwarded to the node.
+
+```bash
+aws ssm put-parameter --name /anime-review/postgres/password \
+  --type SecureString --region eu-north-1 --value "$(openssl rand -base64 24)"
+```
 
 ## 7. Foundation checks
 

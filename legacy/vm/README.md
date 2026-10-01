@@ -1,108 +1,140 @@
-# AWS VMs · Docker application deployment
+# Phase 2b · Containers on AWS virtual machines
 
-[Current Kubernetes deployment](../../README.md) · [AWS bootstrap](../../docs/BOOTSTRAP-AWS.md) · [Variables](../../docs/CONFIGURATION.md) · [Recovered CI](../../docs/ci-history/README.md)
+[← Phase 3 (current)](../../README.md) · [Phase 2a · native Node.js](../local/README.md) · [AWS foundations](../../docs/BOOTSTRAP-AWS.md) · [Variables](../../docs/CONFIGURATION.md) · [Recovered pipelines](../../docs/ci-history/README.md)
 
-![VM architecture](../../docs/assets/02-vm.png)
+Same network and VMs as phase 2a, but the frontend and API now run as **Docker containers pulled from the GitLab registry**, and the whole chain is automated: the application pipeline builds two multi-arch images, then **triggers this infrastructure pipeline** with the image tag; Terraform runs through OIDC and Ansible deploys through the bastion. PostgreSQL stays native on its VM.
 
-This is the container variant of the VM phase: frontend/API run in Docker while PostgreSQL remains native. For Node.js/systemd deployment, see [legacy/local](../local/README.md). Run commands from the infrastructure repository root.
+![Phase 2b · containers on AWS VMs](../../docs/assets/02-vm-docker.png)
 
-## 1. Scope and requirements
+<details>
+<summary><b>Detailed view</b> (every component, port and job)</summary>
 
-Four Ubuntu ARM64 EC2 instances: bastion, frontend, backend and PostgreSQL. The frontend has a public IP; the API and database remain private. Access control combines AWS routing, Security Groups and PostgreSQL's `pg_hba.conf`.
+![Phase 2b · containers on AWS VMs · detailed](../../docs/assets/02-vm-docker-detailed.png)
 
-Prepare S3/OIDC foundations, Terraform 1.13, AWS CLI, Ansible, `jq`, SSH and private key `~/.ssh/anime-review`. The workstation must reach bastion port 22 and be covered by `admin_cidr`. For the Docker variant, publish two ARM64 images and obtain a `read_registry` deploy token.
+</details>
 
-This guide uses today's `legacy/vm/terraform` layout for both variants. They are **alternatives on the same VMs**: do not run systemd and Docker simultaneously on ports 3000/3001. To reproduce the exact original layout, use a separate checkout of the historical commit referenced in the CI archives.
+## Implemented DevOps features
 
-## 2. Provision networking and machines
+| Area | What was implemented |
+|---|---|
+| Terraform | `legacy/vm/terraform`: VPC, 3 subnets (public / API / DB), IGW, NAT, per-tier route tables and security groups, 4 × `t4g.micro` ARM64, bastion EIP; S3 state `anime-review/terraform.tfstate` |
+| Immutable artifacts | Images `…/backend:<sha>` and `…/frontend:<sha>` built once by app CI (`linux/amd64` + `linux/arm64`), never on the servers |
+| Ansible roles | `docker.yml` (Docker Engine) → `database.yml` (PostgreSQL 16) → `backend.yml` → `frontend.yml` |
+| Containers | `community.docker.docker_container`, `pull: always`, `restart_policy: unless-stopped`, env injected by Ansible (`DATABASE_*`, `API_URL`), seed disabled, `no_log` on secrets |
+| Health gates | Ansible waits for `/health` then `/ready` before moving on |
+| Registry auth | GitLab **deploy token** (`read_registry`) stored in Ansible Vault |
+| CI/CD | multi-project pipeline app → infra, `strategy: depend`, OIDC → STS for Terraform, SSH key and Vault password as GitLab **File** variables |
+
+```mermaid
+sequenceDiagram
+    participant A as App CI (anime-review-app)
+    participant R as GitLab registry
+    participant I as Infra CI (this repo, phase 2b file)
+    participant AWS as AWS (STS, S3 state, EC2)
+    participant B as Bastion
+    participant V as VMs
+    A->>A: lint · unit · integration · coverage
+    A->>R: buildx push backend:<sha>, frontend:<sha>
+    A->>I: trigger main + IMAGE_TAG
+    I->>AWS: OIDC → temporary credentials
+    I->>AWS: terraform validate · plan · apply
+    I->>B: SSH (SSH_PRIVATE_KEY file variable)
+    B->>V: ansible-playbook site.yml -e image_tag=IMAGE_TAG
+    V->>R: docker pull (deploy token)
+    V-->>I: /health and /ready OK
+    I-->>A: downstream status
+```
+
+## Prerequisites
+
+Everything from [phase 2a](../local/README.md#prerequisites), plus:
+
+- Both images published for **arm64** (the VMs are Graviton). See the app repository, [phase 2 guide](https://github.com/Songhai9/anime-review-app/blob/main/legacy/vm/README.md).
+- A GitLab **deploy token** with `read_registry` on the application project.
+- For CI: runner image `ci-image:1.0` (phase 2 version of `ci/Dockerfile`) in your registry, and a runner whose egress IP is allowed by `admin_cidr` (a shared SaaS runner has changing IPs).
+
+### Files to prepare
+
+| Example | Copy to | Then |
+|---|---|---|
+| `docs/examples/vm.terraform.tfvars.example` | `legacy/vm/terraform/terraform.tfvars` | fill values |
+| `docs/examples/vault-vm.yml.example` | `legacy/vm/ansible/inventory/group_vars/all/vault.yml` | `ansible-vault encrypt` |
+| — | `legacy/vm/ansible/inventory/group_vars/all/vars.yml` | set `registry_image_prefix` to your registry path |
+
+Old `backend/vault.yml` and `database/vault.yml` in that inventory must be decryptable with the **same** Vault password, or removed from your copy.
+
+### GitLab variables for the pipeline
+
+| Project | Variable | Type | Value |
+|---|---|---|---|
+| infra | `AWS_ROLE_ARN` | Variable | `terraform_ci_role_arn` output of `bootstrap/` |
+| infra | `TF_VAR_admin_cidr` | Variable | runner/workstation egress `/32` |
+| infra | `TF_VAR_ssh_public_key` | Variable | public key contents |
+| infra | `SSH_PRIVATE_KEY` | **File** | private key, with trailing newline |
+| infra | `ANSIBLE_VAULT_PASSWORD_FILE` | **File** | Vault password |
+| app | — | — | `IMAGE_TAG` is computed and forwarded by `trigger_infra` |
+
+Also allow the app project in the infra project's **Job token permissions**.
+
+## Deploy manually
 
 From the infra repository root:
 
 ```bash
-cp docs/examples/vm.terraform.tfvars.example legacy/vm/terraform/terraform.tfvars
-# Set admin_cidr and ssh_public_key; configure the actual S3 backend.
+# 1. Provision (skip if phase 2a already created the VMs)
 terraform -chdir=legacy/vm/terraform init
-terraform -chdir=legacy/vm/terraform fmt -check
-terraform -chdir=legacy/vm/terraform validate
 terraform -chdir=legacy/vm/terraform plan -out=vm.tfplan
-terraform -chdir=legacy/vm/terraform show vm.tfplan
 terraform -chdir=legacy/vm/terraform apply vm.tfplan
-terraform -chdir=legacy/vm/terraform output
-```
 
-The plan should match the expected VMs, VPC, subnets, routes, NAT/IGW, Security Groups, public key and Elastic IP. State key `anime-review/terraform.tfstate` is separate from the cluster's state. NAT, VMs, volumes and IP addresses may incur charges while provisioned.
-
-| Source | Destination | Port | Purpose |
-|---|---|---|---|
-| Internet | Public frontend | TCP 3000 | HTTP web interface |
-| Frontend | Private backend | TCP 3001 | Internal API |
-| Backend | Private PostgreSQL | TCP 5432 | SQL queries |
-| Admin CIDR | Bastion | TCP 22 | SSH entry point |
-| Bastion | Application VMs | TCP 22 | Ansible SSH hop |
-| VMs | Internet through appropriate routes | TCP 80/443 | Packages, Git, registry, AniList |
-
-Security Groups allow source groups corresponding to the tiers, rather than opening ports to everyone. The private backend IP also restricts PostgreSQL through a `/32` rule.
-
-## 3. Generate and inspect inventory
-
-```bash
+# 2. Inventory through the bastion
 chmod 600 ~/.ssh/anime-review
 bash legacy/vm/ansible/scripts/generate_inventory.sh
 ansible-inventory -i legacy/vm/ansible/inventory/inventory.ini --graph
-BASTION_IP=$(terraform -chdir=legacy/vm/terraform output -raw bastion_eip)
-ssh -i ~/.ssh/anime-review "ubuntu@$BASTION_IP" 'hostname'
-```
 
-The generator uses private IPs for frontend/backend/database and an SSH `ProxyCommand` through the bastion. The `private` group contains all three tiers, including the frontend that also has a public IP. Inventory must match the **VM state** outputs, never the cluster state.
-
-The archive disables host-key verification (`StrictHostKeyChecking=no`). This historical compromise should be corrected for a lasting environment: record verified host fingerprints in `known_hosts`, then enable strict checking.
-
-## 4. Docker variant · two images, native database
-
-Populate `legacy/vm/ansible/inventory/group_vars/all/vault.yml` from the VM Vault example. The token must provide `read_registry` access to the application registry. Set the actual `registry_image_prefix` in `all/vars.yml`, for example `registry.gitlab.com/YOUR_GROUP/YOUR_APP`.
-
-Old Vault files in backend/database groups may still exist: they must be decryptable with the same Vault password and must not override the common secret inconsistently. If you move their values to `all/vault.yml`, remove the duplicates in your own copy after preserving anything needed.
-
-```bash
+# 3. Secrets
+cp docs/examples/vault-vm.yml.example legacy/vm/ansible/inventory/group_vars/all/vault.yml   # edit
 ansible-vault encrypt legacy/vm/ansible/inventory/group_vars/all/vault.yml
+
+# 4. Deploy a published tag
 ansible-galaxy collection install -r legacy/vm/ansible/requirements.yml
-ansible private -i legacy/vm/ansible/inventory/inventory.ini \
-  --ask-vault-pass -m wait_for_connection -a 'timeout=300'
-export IMAGE_TAG=REPLACE_WITH_PUBLISHED_COMMIT_TAG
-ansible-playbook -i legacy/vm/ansible/inventory/inventory.ini \
-  --ask-vault-pass -e "image_tag=$IMAGE_TAG" legacy/vm/ansible/playbooks/site.yml
+export IMAGE_TAG=<short-sha-published-by-app-ci>
+ansible-playbook -i legacy/vm/ansible/inventory/inventory.ini --ask-vault-pass \
+  -e "image_tag=$IMAGE_TAG" legacy/vm/ansible/playbooks/site.yml
 ```
 
-The playbook runs Docker → PostgreSQL → backend → frontend. Containers are named `anime-review-api` and `anime-review-frontend`, with `pull: always` and `restart_policy: unless-stopped`. Ansible injects the SQL connection into the API and the private API address into the frontend. Seeding is disabled. Sensitive tasks use `no_log`; registry credentials nevertheless remain a secret stored on the host for image pulls.
+If the VMs previously ran phase 2a, stop and disable `anime-review-api` / `anime-review-frontend` systemd units first so ports 3000/3001 are free. PostgreSQL and its data stay in place.
 
-If the same VMs previously ran native services, stop/disable those systemd services before starting containers and check that ports are free. PostgreSQL can remain in place if its database, username and password are preserved. Back up before any update whose initialization SQL could change the schema.
+## Deploy with the pipeline
 
-## 5. Verify the result
+The phase 2b pipeline is archived at [`legacy/.gitlab-ci.yml`](../.gitlab-ci.yml) (paths already adapted to `legacy/vm/…`). GitLab does not run it while the root `.gitlab-ci.yml` is the Kubernetes pipeline. To reactivate it on a dedicated project or branch, set **Settings → CI/CD → General pipelines → CI/CD configuration file** to `legacy/.gitlab-ci.yml`.
+
+| Job | Stage | Runs when |
+|---|---|---|
+| `validating_job` | validate | every pipeline on `main` |
+| `planning_job` | plan | every pipeline |
+| `provisioning_job` | provision | every pipeline (**automatic apply**) |
+| `configuring_job` | configure | only when `IMAGE_TAG` is set (i.e. triggered by app CI) |
+
+On the app side, use [`docs/ci-history/phase2-vm.gitlab-ci.yml`](https://github.com/Songhai9/anime-review-app/blob/main/docs/ci-history/phase2-vm.gitlab-ci.yml), which ends with `trigger_infra`.
+
+## Verify
 
 ```bash
 FRONTEND_IP=$(terraform -chdir=legacy/vm/terraform output -raw frontend_public_ip)
 curl --fail "http://$FRONTEND_IP:3000/health"
-# Docker variant: check from the private backend through Ansible.
-ansible backend -i legacy/vm/ansible/inventory/inventory.ini --ask-vault-pass \
-  -m uri -a 'url=http://localhost:3001/ready status_code=200'
-ansible 'frontend:backend' -i legacy/vm/ansible/inventory/inventory.ini \
-  --ask-vault-pass -b -m command -a 'docker ps'
+ansible 'frontend:backend' -i legacy/vm/ansible/inventory/inventory.ini --ask-vault-pass \
+  -b -m command -a 'docker ps --format "{{.Names}} {{.Image}} {{.Status}}"'
 ```
 
-For native services, inspect `systemctl status anime-review-api` / `anime-review-frontend` and `journalctl -u SERVICE_NAME`. For Docker, inspect `docker logs anime-review-api` and `docker logs anime-review-frontend`. In both cases, perform a real browser write and verify persistence.
+Both containers must show the expected `<sha>` tag. Logs: `docker logs anime-review-api`. Troubleshoot the API → DB path layer by layer: route → security group → listening address → `pg_hba.conf` → credentials. Never open 5432 to the Internet.
 
-Diagnose API/database failures layer by layer: route → Security Group → listening port → `pg_hba.conf` → username/password → schema. Do not expose 5432 to the Internet to bypass an inter-tier problem.
+## Limits of this phase (why phase 3 exists)
 
-## 6. Reactivate historical VM CI
+- One instance per tier: no redundancy, no rolling update (a new tag restarts the only container).
+- The runner needs SSH access to the bastion; host key checking is disabled.
+- Apply is automatic on every `main` pipeline.
+- Each VM is configured individually; there is no scheduler, self-healing or service discovery.
 
-Two infra files are supplied: the original September 18 version (`terraform/`, `ansible/`) and today's archive (`legacy/vm/...`). Select the latter for today's directory layout. Place it at a dedicated path and select that path under **Settings → CI/CD → General pipelines → CI/CD configuration file**, or deliberately replace the root configuration on a branch dedicated to this phase.
+## Cleanup
 
-Configure `AWS_ROLE_ARN`, `TF_VAR_admin_cidr`, `TF_VAR_ssh_public_key`, `SSH_PRIVATE_KEY` (File) and `ANSIBLE_VAULT_PASSWORD_FILE` (File). In the application project, enable `phase2-vm.gitlab-ci.yml`, which forwards `IMAGE_TAG`.
-
-The VM runner must reach the bastion from an authorized CIDR. A personal workstation `/32` is insufficient for a SaaS runner with changing outbound addresses: use a runner with known egress or adapt the access architecture. SSM belongs to the cluster phase and is not implemented in this old VM pipeline.
-
-This CI automatically applies the plan and runs Ansible only when `IMAGE_TAG` is supplied. It declares a `test` stage without a job. These are properties of the archive, not safety or validation guarantees added later. A standalone infra pipeline can provision resources without deploying the application.
-
-## 7. Shutdown and cleanup
-
-To release this phase's resources, inspect a destroy plan for the VM state only. Back up PostgreSQL first and verify that the targeted resources belong to the demonstration. Preserve S3/OIDC bootstrap if subsequent phases use it. Deleting VMs is not a backup mechanism.
+`pg_dump` the database, then `terraform -chdir=legacy/vm/terraform destroy`. The VM and cluster states are separate: this never touches phase 3 resources.
