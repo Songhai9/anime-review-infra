@@ -327,13 +327,6 @@ flowchart TD
 
 **Rebuild from the pipeline:** GitLab *Run pipeline* with `REBUILD_CLUSTER=true`, then start `terraform_apply`; GitHub *Actions → Infrastructure CI/CD → Run workflow* with `rebuild_cluster` checked, then approve the `infrastructure` environment. Everything after the approval is automatic, up to the application being deployed. The rebuild flag never destroys anything: to start from an empty account, run `terraform -chdir=terraform destroy` first.
 
-> [!WARNING]
-> **Known gaps in the current code**
-> - **GitLab only:** the k8s repository's `.gitlab-ci.yml` no longer contains a job for `BOOTSTRAP_CLUSTER` (removed in `726bb49`), so the downstream GitLab pipeline has no job and `bootstrap_k8s` fails. The GitHub path works (`deploy.yml` handles `bootstrap_cluster`). A ready-to-paste GitLab job is proposed in [anime-review-k8s › docs/examples/bootstrap-job.gitlab-ci.yml.example](https://github.com/Songhai9/anime-review-k8s/blob/main/docs/examples/bootstrap-job.gitlab-ci.yml.example). Until then, run `bootstrap-cluster.sh` by hand (k8s README, step 3).
-> - The SSM wait loop counts **every** Online instance in the region, not only the three cluster nodes. Filter by the Terraform instance IDs if other SSM-managed instances exist in the account.
-> - GitLab's `terraform_plan` runs on every `main` pipeline, including documentation-only commits (GitHub only plans when `terraform/**` changed).
-> - Both platforms target the **same** AWS resources and state: run one at a time, or keep one of them for validation only.
-
 ## Troubleshooting
 
 | Symptom | Where to look |
